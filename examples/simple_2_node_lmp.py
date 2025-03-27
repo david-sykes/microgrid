@@ -14,7 +14,7 @@ Sg1 = Generator('S_Gas', capacities=[100, 100, 100], costs=[100, 100, 100])
 b2.add_generator(Sg1)
 
 # Initialise network and add buses
-n = Network(name='Simple 3 Node', timesteps=[1,2,3])
+n = Network(name='Simple 2 Node', timesteps=[1,2,3])
 n.add_bus(b1)
 n.add_bus(b2)
 
