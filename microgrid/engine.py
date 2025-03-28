@@ -24,7 +24,18 @@ class Network:
             g.outputs = []
             for ts, capacity in zip(self.timesteps, g.capacities):
                 g.outputs.append(LpVariable(f"{g.name}_output_{ts}", 0, capacity))
-            
+        for su in bus.storage_units:
+            su.net_inflows = []
+            su.socs_start_of_ts = []
+            su.socs_end_of_ts = []
+            for i, ts in enumerate(self.timesteps):
+                su.net_inflows.append(
+                    LpVariable(f"{su.name}_net_inflows_{ts}", 
+                    -su.max_discharge_capacities[i],
+                    su.max_charge_capacities[i]))
+                su.socs_start_of_ts.append(LpVariable(f"{su.name}_soc_start_of_{ts}", 0, su.max_soc_capacity))
+                su.socs_end_of_ts.append(LpVariable(f"{su.name}_soc_end_of_{ts}", 0, su.max_soc_capacity))
+                
 
     def add_transmission_line(self, transmission_line):
         transmission_line.network = self
@@ -43,20 +54,49 @@ class Network:
         print("Checking timesteps match accross all components")
 
         for b in self.buses:
-            if len(b.demands) != len(self.timesteps):
-                raise TimestepLengthMismatch(f"Demand timesteps do not match network timesteps for {b.name}")
+            for l in b.loads:
+                if len(l.demands) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Demand timesteps do not match network timesteps for {b.name}")
             for g in b.generators:
                 if len(g.capacities) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Generator capacity timesteps do not match network timesteps for {g.name}")
                 if len(g.costs) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Generator cost timesteps do not match network timesteps for {g.name}")
+            for su in b.storage_units:
+                if len(su.max_charge_capacities) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Storage unit charge capacity timesteps do not match network timesteps for {su.name}")
+                if len(su.max_discharge_capacities) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Storage unit discharge capacity timesteps do not match network timesteps for {su.name}")
+
 
         # Generator capacity constraints
         for bus in self.buses:
             for generator in bus.generators:
                 for i, ts in enumerate(self.timesteps):
                     self.model += generator.outputs[i] <= generator.capacities[i], f"Generator_Capacity_{generator.name}_{ts}"
-                
+
+        # Storage Unit Constraints
+        for bus in self.buses:
+            
+            for su in bus.storage_units:
+                self.model += su.socs_start_of_ts[0] == 0, f"Storage_SOC_Start_{su.name}" # Storage SOC at start is zero - only needs doing once
+                self.model += su.socs_end_of_ts[-1] == 0, f"Storage_SOC_End_{su.name}" # Storage SOC at end is zero - only needs doing once
+
+                for i, ts in enumerate(self.timesteps):
+                    # Storage unit can't inflow or outflow more than it's max charge/discharge capacity
+                    self.model += su.net_inflows[i] <= su.max_charge_capacities[i], f"Storage_netinflow_Max_{su.name}_{ts}"
+                    self.model += su.net_inflows[i] >= -su.max_discharge_capacities[i], f"Storage_netinflow_Min_{su.name}_{ts}"
+
+                    # Storage unit SOC can't be more than max capacity or less than zero
+                    self.model += su.socs_start_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_start_of_{ts}"
+                    self.model += su.socs_start_of_ts[i] >= 0, f"Storage_SOC_Min_{su.name}_start_of_{ts}" # Storage SOC at end is zero - only needs doing once
+                    self.model += su.socs_end_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_end_of_{ts}"
+                    self.model += su.socs_end_of_ts[i] >= 0, f"Storage_SOC_Min_{su.name}_end_of_{ts}" # Storage SOC at end is zero - only needs doing once
+
+                    self.model += su.socs_end_of_ts[i] == su.socs_start_of_ts[i] + su.net_inflows[i], f"Storage_SOC_charge_balance_{su.name}_{ts}"
+                    if i < len(self.timesteps) - 1:
+                        self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"Storage_SOC_continuity_{su.name}_{ts}"
+
 
         # Transmission Line Constraints
         for line in self.transmission_lines.values():
@@ -74,7 +114,7 @@ class Network:
                     lpSum(g.outputs[i] for g in bus.generators)
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_in()])
                     - lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
-                    == bus.demands[i]
+                    == lpSum(l.demands[i] for l in bus.loads) + lpSum(su.net_inflows[i] for su in bus.storage_units)
                 )
                 self.model += constraint, f"Energy_Balance_{bus.name}_{ts}"
                 energy_balance_constraints_ts[bus] = constraint
@@ -105,10 +145,23 @@ class Network:
         dot = Digraph(comment='Energy Network')
         dot.graph_attr['rankdir'] = 'LR'
         for b in self.buses:
-            dot.node(b.name, label=f"{b.name}: {b.demands[timestep_index]}MW \n {b.nodal_prices[timestep_index]} £/MWh", shape='polygon')
+            total_demand = sum([l.demands[timestep_index] for l in b.loads]) 
+            dot.node(b.name, label=f"{b.name}: {total_demand} MW \n {b.nodal_prices[timestep_index]} £/MWh", shape='doubleoctagon')
             for g in b.generators:
                 dot.node(g.name, label=f"{g.name}: £{g.costs[timestep_index]}/MWh")
                 dot.edge(g.name, b.name, label=f"{g.outputs[timestep_index].varValue} / {g.capacities[timestep_index]}")
+            for l in b.loads:
+                dot.node(l.name, label=f"{l.name}: {l.demands[timestep_index]}MW", shape='house')
+                dot.edge(b.name, l.name)
+            for su in b.storage_units:
+                dot.node(su.name, label=f"""{su.name}\nStart SOC: {su.socs_start_of_ts[timestep_index].varValue} / {su.max_soc_capacity}\nEnd SOC: {su.socs_end_of_ts[timestep_index].varValue} / {su.max_soc_capacity}""", shape='cylinder')
+                if su.net_inflows[timestep_index].varValue > 0:
+                    dot.edge(b.name, su.name, label=f"{su.net_inflows[timestep_index].varValue} / {su.max_charge_capacities[timestep_index]}")
+                elif su.net_inflows[timestep_index].varValue < 0:
+                    dot.edge(su.name, b.name, label=f"{-su.net_inflows[timestep_index].varValue} / {su.max_discharge_capacities[timestep_index]}")
+                elif su.net_inflows[timestep_index].varValue == 0:
+                    dot.edge(b.name, su.name, label=f"{su.net_inflows[timestep_index].varValue} / {su.max_charge_capacities[timestep_index]}",
+                    arrowhead='none')
         for t in self.transmission_lines.values():
             if t.flows[timestep_index].varValue > 0:
                 dot.edge(t.start_bus.name, t.end_bus.name,
@@ -117,25 +170,6 @@ class Network:
                 dot.edge(t.end_bus.name, t.start_bus.name,
                         label=str(-t.flows[timestep_index].varValue), color='blue', fontcolor='blue')
         return dot
-
-
-class Bus:
-    def __init__(self, name, demands: list):
-        self.name = name
-        self.generators = []
-        self.demands = demands
-        self.network = None
-        self.nodal_prices = []
-
-    def add_generator(self, generator):
-        self.generators.append(generator)
-        generator.bus = self
-
-    def get_lines_flowing_in(self):
-        return [line for line in self.network.transmission_lines.values() if line.end_bus == self]
-
-    def get_lines_flowing_out(self):
-        return [line for line in self.network.transmission_lines.values() if line.start_bus == self]
 
 
 class TransmissionLine:
@@ -160,3 +194,53 @@ class Generator:
     def __repr__(self):
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
+
+class Load:
+    def __init__(self, name, demands: list):
+        self.name = name
+        self.demands = demands
+        self.bus = None
+
+    def __repr__(self):
+        output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
+        return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
+
+class StorageUnit:
+    def __init__(self, name, max_soc_capacity, max_charge_capacities, max_discharge_capacities):
+        self.name = name
+        self.max_soc_capacity = max_soc_capacity
+        self.max_charge_capacities = max_charge_capacities
+        self.max_discharge_capacities = max_discharge_capacities
+    
+    def __repr__(self):
+        return f"{self.name} - Max SOC Capacity: {self.max_soc_capacity} - Max Charge Capacities: {self.max_charge_capacities} - Max Discharge Capacities: {self.max_discharge_capacities}"
+    
+    
+        
+
+class Bus:
+    def __init__(self, name):
+        self.name = name
+        self.generators = []
+        self.loads = []
+        self.storage_units = []
+        self.network = None
+        self.nodal_prices = []
+
+    def add_generator(self, generator: Generator):
+        self.generators.append(generator)
+        generator.bus = self
+
+    def add_load(self, load: Load):
+        self.loads.append(load)
+        load.bus = self
+
+    def add_storage_unit(self, storage_unit: StorageUnit):
+        self.storage_units.append(storage_unit)
+        storage_unit.bus = self
+
+    def get_lines_flowing_in(self):
+        return [line for line in self.network.transmission_lines.values() if line.end_bus == self]
+
+    def get_lines_flowing_out(self):
+        return [line for line in self.network.transmission_lines.values() if line.start_bus == self]
