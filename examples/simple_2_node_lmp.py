@@ -1,4 +1,6 @@
 from microgrid.engine import Network, Bus, Generator, TransmissionLine, Load, StorageUnit
+from microgrid.draw import draw_network
+
 import os
 
 # Setup 1st bus
@@ -42,5 +44,5 @@ for b in n.buses:
     
 
 for ts in n.timesteps:
-    dot = n.draw_network(timestep=ts)
+    dot = draw_network(n, ts)
     dot.render(f"examples/outputs/{n.name.replace(' ', '-')}_{ts}", format='png')
