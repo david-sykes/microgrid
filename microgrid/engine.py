@@ -28,14 +28,19 @@ class Network:
         
         # Storage
         for su in bus.storage_units:
-            su.net_inflows = []
+            su.charge_inflows = [] #Always positive
+            su.discharge_outflows = [] #Always positive
             su.socs_start_of_ts = []
             su.socs_end_of_ts = []
             for i, ts in enumerate(self.timesteps):
-                su.net_inflows.append(
-                    LpVariable(f"{su.name}_net_inflows_{ts}", 
-                    -su.max_discharge_capacities[i],
+                su.charge_inflows.append(
+                    LpVariable(f"{su.name}_charge_inflows_{ts}", 
+                    0,
                     su.max_charge_capacities[i]))
+                su.discharge_outflows.append(
+                    LpVariable(f"{su.name}_discharge_outflows_{ts}", 
+                    0,
+                    su.max_discharge_capacities[i]))
                 su.socs_start_of_ts.append(LpVariable(f"{su.name}_soc_start_of_{ts}", 0, su.max_soc_capacity))
                 su.socs_end_of_ts.append(LpVariable(f"{su.name}_soc_end_of_{ts}", 0, su.max_soc_capacity))
         
@@ -97,8 +102,8 @@ class Network:
 
                 for i, ts in enumerate(self.timesteps):
                     # Storage unit can't inflow or outflow more than it's max charge/discharge capacity
-                    self.model += su.net_inflows[i] <= su.max_charge_capacities[i], f"Storage_netinflow_Max_{su.name}_{ts}"
-                    self.model += su.net_inflows[i] >= -su.max_discharge_capacities[i], f"Storage_netinflow_Min_{su.name}_{ts}"
+                    self.model += su.charge_inflows[i] <= su.max_charge_capacities[i], f"Storage_charge_inflows_Max_{su.name}_{ts}"
+                    self.model += su.discharge_outflows[i] <= su.max_discharge_capacities[i], f"Storage_discharge_outflows_Min_{su.name}_{ts}"
 
                     # Storage unit SOC can't be more than max capacity or less than zero
                     self.model += su.socs_start_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_start_of_{ts}"
@@ -106,7 +111,13 @@ class Network:
                     self.model += su.socs_end_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_end_of_{ts}"
                     self.model += su.socs_end_of_ts[i] >= 0, f"Storage_SOC_Min_{su.name}_end_of_{ts}" # Storage SOC at end is zero - only needs doing once
 
-                    self.model += su.socs_end_of_ts[i] == su.socs_start_of_ts[i] + su.net_inflows[i], f"Storage_SOC_charge_balance_{su.name}_{ts}"
+                    # SOC and charge/discharge balance
+                    self.model += su.socs_end_of_ts[i] == su.socs_start_of_ts[i]\
+                                            + su.charge_efficiency * su.charge_inflows[i]\
+                                            - (1 / su.discharge_efficiency) * su.discharge_outflows[i],\
+                                            f"Storage_SOC_charge_balance_{su.name}_{ts}"
+                    
+                    # Continuity of SOC
                     if i < len(self.timesteps) - 1:
                         self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"Storage_SOC_continuity_{su.name}_{ts}"
 
@@ -135,11 +146,16 @@ class Network:
             energy_balance_constraints_ts = {}
             for bus in self.buses:
                 constraint = (
+                    # Flows into node
                     lpSum(g.outputs[i] for g in bus.generators)
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_in()])
-                    - lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
-                    == lpSum(l.demands[i] for l in bus.loads) 
-                    + lpSum(su.net_inflows[i] for su in bus.storage_units)
+                    + lpSum(su.discharge_outflows[i] for su in bus.storage_units)
+                    
+                    == 
+                    # Flows out of node
+                    lpSum(l.demands[i] for l in bus.loads) 
+                    + lpSum(su.charge_inflows[i] for su in bus.storage_units)
+                    + lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
                     + lpSum(fl.demands[i] for fl in bus.flexible_loads)
                 )
                 self.model += constraint, f"Energy_Balance_{bus.name}_{ts}"
@@ -241,11 +257,13 @@ class FlexibleLoad:
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
 
 class StorageUnit:
-    def __init__(self, name, max_soc_capacity, max_charge_capacities, max_discharge_capacities):
+    def __init__(self, name, max_soc_capacity, max_charge_capacities, max_discharge_capacities, charge_efficiency=0.95, discharge_efficiency=0.95):
         self.name = name
         self.max_soc_capacity = max_soc_capacity
         self.max_charge_capacities = max_charge_capacities
         self.max_discharge_capacities = max_discharge_capacities
+        self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
+        self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
     
     def __repr__(self):
         return f"{self.name} - Max SOC Capacity: {self.max_soc_capacity} - Max Charge Capacities: {self.max_charge_capacities} - Max Discharge Capacities: {self.max_discharge_capacities}"

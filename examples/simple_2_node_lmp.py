@@ -37,10 +37,6 @@ n.add_transmission_line(t)
 
 #Solve and draw
 status = n.solve()
-
-for b in n.buses:
-    for su in b.storage_units:
-        print(su.name, [s.varValue for s in su.socs_start_of_ts], [s.varValue for s in su.socs_end_of_ts], [n.varValue for n in su.net_inflows])
     
 
 for ts in n.timesteps:
