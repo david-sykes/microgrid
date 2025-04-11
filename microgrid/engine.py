@@ -19,10 +19,14 @@ class Network:
         self.buses.append(bus)
         bus.network = self
         bus.nodal_prices = [None] * len(self.timesteps)
+        
+        # Generators
         for g in bus.generators:
             g.outputs = []
             for ts, capacity in zip(self.timesteps, g.capacities):
                 g.outputs.append(LpVariable(f"{g.name}_output_{ts}", 0, capacity))
+        
+        # Storage
         for su in bus.storage_units:
             su.net_inflows = []
             su.socs_start_of_ts = []
@@ -34,6 +38,16 @@ class Network:
                     su.max_charge_capacities[i]))
                 su.socs_start_of_ts.append(LpVariable(f"{su.name}_soc_start_of_{ts}", 0, su.max_soc_capacity))
                 su.socs_end_of_ts.append(LpVariable(f"{su.name}_soc_end_of_{ts}", 0, su.max_soc_capacity))
+        
+        # Flexible Loads
+        for fl in bus.flexible_loads:
+            fl.demands = []
+            for ts in self.timesteps:
+                fl.demands.append(LpVariable(f"{fl.name}_demand_{ts}", 0, fl.max_capacity))
+                
+            
+        
+
                 
 
     def add_transmission_line(self, transmission_line):
@@ -104,6 +118,17 @@ class Network:
                 self.model += line.flows[i] >= -line.capacities[i], f"Transmission_Line_Capacity_Min_{line.name}_{ts}"
 
 
+        # Flexible Load Constraints
+        for bus in self.buses:
+            for fl in bus.flexible_loads:
+                for i, ts in enumerate(self.timesteps):
+                    self.model += fl.demands[i] >= 0, f"Flexible_Load_Min_{fl.name}_{ts}"
+                    self.model += fl.demands[i] <= fl.max_capacity, f"Flexible_Load_Max_{fl.name}_{ts}"
+                for load_window in fl.load_windows:
+                    timestep_indices = [self.timestep_index[ts] for ts in load_window.timesteps]
+                    self.model += lpSum([fl.demands[i] for i in timestep_indices]) == load_window.total_required_demand, f"Flexible_Load_Sum_{fl.name}_{load_window}"
+                    
+
         # Energy Balance: Generation + Imports = Demand + Exports
         energy_balance_constraints = []
         for i, ts in enumerate(self.timesteps):
@@ -113,7 +138,9 @@ class Network:
                     lpSum(g.outputs[i] for g in bus.generators)
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_in()])
                     - lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
-                    == lpSum(l.demands[i] for l in bus.loads) + lpSum(su.net_inflows[i] for su in bus.storage_units)
+                    == lpSum(l.demands[i] for l in bus.loads) 
+                    + lpSum(su.net_inflows[i] for su in bus.storage_units)
+                    + lpSum(fl.demands[i] for fl in bus.flexible_loads)
                 )
                 self.model += constraint, f"Energy_Balance_{bus.name}_{ts}"
                 energy_balance_constraints_ts[bus] = constraint
@@ -137,10 +164,6 @@ class Network:
                 bus.nodal_prices[i] = self.model.constraints[constraint.name].pi  # Extract shadow price
         print(f"Solution: {LpStatus[self.model.status]}")
         return LpStatus[self.model.status]
-
-
-
-
 
 
 class TransmissionLine:
@@ -176,6 +199,47 @@ class Load:
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
 
+class FlexibleLoadWindow:
+    """This class defines the demand required in a given time window,
+    the model can then determine the best way for that load to be met by
+    the grid"""
+    def __init__(self, name, timesteps: list, total_required_demand: float):
+        self.name = name
+        self.timesteps = []
+        self.total_required_demand = total_required_demand
+
+
+class FlexibleLoad:
+    def __init__(self, name, load_windows: list[FlexibleLoadWindow], max_capacity: float):
+        """
+        Each load window is a list of timestep ids and the demand that must be met flexibly in those
+        timesteps. The timesteps don't need to be contiguous in a load window (e.g. they could define evenings for a whole week) 
+        but all the load windows for a flexible load must not have overlapping timesteps.
+        """
+        self.name = name
+        self.load_windows = self.validate_load_windows(load_windows)
+        self.bus = None
+        self.max_capacity = max_capacity
+
+    def validate_load_windows(self, load_windows):
+        # Check load windows don't overlap
+        if len(load_windows) == 0:
+            return ValueError("Load windows cannot be empty")
+        else:
+            timesteps_covered = []
+            for window in load_windows:
+                for ts in window.timesteps:
+                    if ts in timesteps_covered:
+                        return ValueError(f"Load windows cannot overlap {ts} already in another window")
+                timesteps_covered.append(window)
+            return load_windows
+        
+    
+
+    def __repr__(self):
+        output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
+        return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
+
 class StorageUnit:
     def __init__(self, name, max_soc_capacity, max_charge_capacities, max_discharge_capacities):
         self.name = name
@@ -197,6 +261,7 @@ class Bus:
         self.storage_units = []
         self.network = None
         self.nodal_prices = []
+        self.flexible_loads = []
 
     def add_generator(self, generator: Generator):
         self.generators.append(generator)
@@ -209,6 +274,10 @@ class Bus:
     def add_storage_unit(self, storage_unit: StorageUnit):
         self.storage_units.append(storage_unit)
         storage_unit.bus = self
+        
+    def add_flexible_load(self, flexible_load: FlexibleLoad):
+        self.flexible_loads.append(flexible_load)
+        flexible_load.bus = self
 
     def get_lines_flowing_in(self):
         return [line for line in self.network.transmission_lines.values() if line.end_bus == self]
