@@ -24,6 +24,11 @@ def draw_network(network, timestep):
             dot.edge(b.name, su.name, label=f"{su.charge_inflows[timestep_index].varValue: .0f} / {su.max_charge_capacities[timestep_index]}")
             dot.edge(su.name, b.name, label=f"{su.discharge_outflows[timestep_index].varValue: .0f} / {su.max_discharge_capacities[timestep_index]}")
 
+        # EV Fleet
+        for evf in b.ev_fleets:
+            dot.node(evf.name, label=f"""{evf.name}\nStart SOC: {evf.socs_start_of_ts[timestep_index].varValue: .0f} / {evf.max_soc_capacity}\nEnd SOC: {evf.socs_end_of_ts[timestep_index].varValue: .0f} / {evf.max_soc_capacity}\nMWh consumed driving: {evf.km_driven[timestep_index]*evf.mwh_per_km_driven: .0f}""", shape='cylinder')
+            dot.edge(b.name, evf.name, label=f"{evf.charge_inflows[timestep_index].varValue: .0f} / {evf.max_charge_capacities[timestep_index]}")
+            dot.edge(evf.name, b.name, label=f"{evf.discharge_outflows[timestep_index].varValue: .0f} / {evf.max_discharge_capacities[timestep_index]}")
 
     # Transmission Lines          
     for t in network.transmission_lines:
