@@ -9,7 +9,7 @@ class Network:
     def __init__(self, name: str, timesteps: list):
         self.name = name
         self.buses = []
-        self.transmission_lines = {}
+        self.transmission_lines = []
         self.solved = False
         self.timesteps = timesteps
         self.timestep_index = {label: i for i, label in enumerate(self.timesteps)}
@@ -57,7 +57,7 @@ class Network:
             transmission_line.flows.append(
                 LpVariable(f"{transmission_line.name}_flow_{ts}", -capacity, capacity)
             )
-        self.transmission_lines[(transmission_line.start_bus, transmission_line.end_bus)] = transmission_line
+        self.transmission_lines.append(transmission_line)
 
     def solve(self):
         # For now we solve the network for all timesteps as one problem
@@ -112,7 +112,7 @@ class Network:
 
 
         # Transmission Line Constraints
-        for line in self.transmission_lines.values():
+        for line in self.transmission_lines:
             for i, ts in enumerate(self.timesteps):
                 self.model += line.flows[i] <= line.capacities[i], f"Transmission_Line_Capacity_Max_{line.name}_{ts}"
                 self.model += line.flows[i] >= -line.capacities[i], f"Transmission_Line_Capacity_Min_{line.name}_{ts}"
@@ -280,7 +280,7 @@ class Bus:
         flexible_load.bus = self
 
     def get_lines_flowing_in(self):
-        return [line for line in self.network.transmission_lines.values() if line.end_bus == self]
+        return [line for line in self.network.transmission_lines if line.end_bus == self]
 
     def get_lines_flowing_out(self):
-        return [line for line in self.network.transmission_lines.values() if line.start_bus == self]
+        return [line for line in self.network.transmission_lines if line.start_bus == self]

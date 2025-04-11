@@ -23,7 +23,7 @@ def draw_network(network, timestep):
             elif su.net_inflows[timestep_index].varValue == 0:
                 dot.edge(b.name, su.name, label=f"{su.net_inflows[timestep_index].varValue} / {su.max_charge_capacities[timestep_index]}",
                 arrowhead='none')
-    for t in network.transmission_lines.values():
+    for t in network.transmission_lines:
         if t.flows[timestep_index].varValue > 0:
             dot.edge(t.start_bus.name, t.end_bus.name,
                     label=f"{t.flows[timestep_index].varValue: .0f} / {t.capacities[timestep_index]}", color='blue', fontcolor='blue')

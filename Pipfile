@@ -6,6 +6,10 @@ name = "pypi"
 [packages]
 pulp = "*"
 graphviz = "*"
+requests = "*"
+pandas = "*"
+jupyter = "*"
+matplotlib = "*"
 
 [dev-packages]
 
