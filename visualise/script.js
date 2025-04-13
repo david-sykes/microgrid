@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
        } else if (node.type === 'load') {
            renderLoadChart(nodeId);
        } else if (node.type === 'storage') {
-           // To implement
+           renderStorageChart(nodeId);
        }
 
         // Update the graph popup with data for the selected node
@@ -743,6 +743,87 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+
+    function renderStorageChart(storageId) {
+
+        if (generatorChart) generatorChart.destroy(); // prevent duplicate overlays
+        if (busChart) busChart.destroy();
+        if (storageChart) storageChart.destroy();
+        if (loadChart) loadChart.destroy();
+
+        const ctx = document.getElementById('flow-chart').getContext('2d');
+        
+        for (let bus in networkData.network.buses) {
+            const busData = networkData.network.buses[bus]; 
+            if (busData.storage_units && busData.storage_units[storageId]) {
+                const storageData = busData.storage_units[storageId];
+                const charge_inflows = storageData.charge_inflows
+                const discharge_outflows = storageData.discharge_outflows
+
+                storageChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: networkData.network.timesteps,
+                        datasets: [
+                            {
+                                label: storageId + " Charge",
+                                data: charge_inflows,
+                                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                                stack: 'storage'
+                            },
+                            {
+                                label: storageId + " Discharge",
+                                data: discharge_outflows.map(v => -v),
+                                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                                stack: 'storage'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                stacked: true
+                            },
+                            y: {
+                                stacked: true,
+                                title: {
+                                    display: true,
+                                    text: 'Power (MW)'
+                                },
+                                grid: {
+                                    drawBorder: true,
+                                    drawOnChartArea: true,
+                                    drawTicks: true,
+                                    color: (context) => {
+                                        if (context.tick.value === 0) return '#333'; // thicker or darker line for y=0
+                                        return 'rgba(0,0,0,0.1)';
+                                    },
+                                    lineWidth: (context) => {
+                                        return context.tick.value === 0 ? 2 : 1;
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Storage flows for ${storageId}`
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+        }
+    }
+
+
 
     // Initialize with graph popup hidden
     hideGraphPopup();
