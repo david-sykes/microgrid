@@ -6,6 +6,8 @@
     <title>Microgrid Visualization</title>
     <link rel="stylesheet" href="styles.css">
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 
 </head>
 <body>
@@ -20,7 +22,7 @@
                 </div>
                 
                 <div id="graph-popup" class="hidden">
-                    <div id="element-graph"></div>
+                    <<canvas id="flow-chart" width="1000" height="400"></canvas>
                     <button id="close-graph-btn">Close Graph</button>
                 </div>
             </div>

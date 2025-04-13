@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let networkData = null;
     let visNodes = null;
     let visEdges = null;
+    let flowChart; // global ref so we can destroy/update later
+
     
     // Load network data from data.json
     fetch('data.json')
@@ -78,23 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Functions
     function showGraphPopup(nodeId) {
         // Update the graph popup with data for the selected node
-        const elementGraph = document.getElementById('element-graph');
-        if (elementGraph) {
-            // Clear previous content
-            elementGraph.innerHTML = '';
-            
-            // Add title for the selected element
-            const title = document.createElement('h3');
-            title.textContent = `Data for ${nodeId}`;
-            elementGraph.appendChild(title);
-            
-            // Here you would add charts or other visualizations for the selected element
-            // For now, just add some placeholder text
-            const placeholder = document.createElement('p');
-            placeholder.textContent = `Showing data visualization for element ${nodeId}. This will be replaced with actual charts.`;
-            elementGraph.appendChild(placeholder);
-        }
-        
+        renderFlowChart(nodeId);
         // Show the popup
         graphPopup.classList.remove('hidden');
     }
@@ -346,6 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 stabilization: {
                     iterations: 100
                 }
+            },
+            interaction: {
+                selectConnectedEdges: false,
+                multiselect: false
             }
         };
         
@@ -361,10 +351,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             // Add event listener for edge selection
-            networkInstance.on('selectEdge', function(params) {
-                const edgeId = params.edges[0];
-                console.log('Edge selected:', edgeId);
-                showGraphPopup(edgeId);
+            networkInstance.on('select', function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    console.log('Node selected:', nodeId);
+                    showGraphPopup(nodeId);
+                }
+                // Do nothing if only edges are selected
             });
         } catch (e) {
             console.error('Error creating network:', e);
@@ -520,6 +513,173 @@ document.addEventListener('DOMContentLoaded', () => {
 
     }
     
+    function generateColor(index, baseHue = 180, saturation = 60, lightness = 60) {
+        const hueStep = 30; // tweak to spread hues more or less
+        const hue = (baseHue + index * hueStep) % 360;
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    function renderFlowChart(busId) {
+            if (flowChart) flowChart.destroy(); // prevent duplicate overlays
+
+            const ctx = document.getElementById('flow-chart').getContext('2d');
+            
+            // Check if the busId exists in the network data
+            if (!networkData.network.buses[busId]) {
+                // If the selected element is not a bus, show a message
+                flowChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: []
+                    },
+                    options: {
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'No flow data available for this element'
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            const busData = networkData.network.buses[busId];
+
+            const flows = {
+                labels: networkData.network.timesteps,
+                datasets: []
+            }
+            let index = 0;
+            // Add generator data if exists
+            if (busData.generators) {
+                for (let generator in busData.generators) {
+                    const generatorData = busData.generators[generator];
+                    if (generatorData.output) {
+                        flows.datasets.push({
+                            label: generator,
+                            data: generatorData.output,
+                            backgroundColor: generateColor(index),
+                            stack: 'energy'
+                        });
+                        index++;
+                    }
+                }
+            }
+
+            // ➖ Outflows (Loads) as negative
+            if (busData.loads) {
+                for (let load in busData.loads) {
+                    const loadData = busData.loads[load];
+                    if (loadData.consumption) {
+                        flows.datasets.push({
+                            label: load,
+                            data: loadData.consumption.map(v => -v),
+                            backgroundColor: generateColor(index, 300),
+                            stack: 'energy'
+                        });
+                    }
+                }
+            }
+
+            //  Transmission line flows
+            for (let line in networkData.network.transmission_lines) {
+                const lineData = networkData.network.transmission_lines[line];
+                let color = generateColor(index, 240);
+                if (lineData.start_bus === busId) {
+                    flows.datasets.push({
+                        label: line,
+                        data: lineData.flow.map(v => -v),
+                        backgroundColor: color,
+                        stack: 'energy'
+                    })
+                        
+                } else if (lineData.end_bus === busId){
+                    flows.datasets.push({
+                        label: line,
+                        data: lineData.flow,
+                        backgroundColor: color,
+                        stack: 'energy'
+                    })
+                }
+            }
+
+            // Storage flows
+            for (let storage in busData.storage_units) {
+                const storageData = busData.storage_units[storage];
+                const charge_inflows = storageData.charge_inflows
+                const discharge_outflows = storageData.discharge_outflows
+                let color = generateColor(index, 60);
+                
+                flows.datasets.push({
+                    label: storage + " Charge",
+                    data: charge_inflows.map(v => -v),
+                    backgroundColor: color,
+                    stack: 'energy'
+                })
+                flows.datasets.push({
+                    label: storage + " Discharge",
+                    data: discharge_outflows,
+                    backgroundColor: color,
+                    stack: 'energy'
+                })
+            }
+                    
+                    
+                    
+                
+                    
+                
+                
+
+            flowChart = new Chart(ctx, {
+                type: 'bar',
+                data: flows,
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Energy Flows at ${busId}`
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true
+                        },
+                        y: {
+                            stacked: true,
+                            title: {
+                                display: true,
+                                text: 'Power (MW)'
+                            },
+                            grid: {
+                                drawBorder: true,
+                                drawOnChartArea: true,
+                                drawTicks: true,
+                                color: (context) => {
+                                    if (context.tick.value === 0) return '#333'; // thicker or darker line for y=0
+                                    return 'rgba(0,0,0,0.1)';
+                                },
+                                lineWidth: (context) => {
+                                    return context.tick.value === 0 ? 2 : 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    
+        
+          
+    
+
     // Initialize with graph popup hidden
     hideGraphPopup();
 });

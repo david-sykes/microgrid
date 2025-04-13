@@ -184,6 +184,7 @@ class AllElements(unittest.TestCase):
         bus2 = Bus("Bus2", n)
         Generator("Gas", capacities=[20, 20, 20, 20], costs=[5, 5, 5, 5], bus=bus2)
         Load("Load2", consumptions=[10, 10, 10, 10], bus=bus2)
+        Generator("Solar", capacities=[0, 2, 2, 0], costs=[0, 0, 0, 0], bus=bus2)
 
         t = TransmissionLine(start_bus=bus1, end_bus=bus2, capacities=[20, 20, 20, 20], network=n)
 
