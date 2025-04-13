@@ -1,3 +1,3 @@
-examples/outputs/*
+test_outputs/*
 Pipfile.lock
 *.pyc
