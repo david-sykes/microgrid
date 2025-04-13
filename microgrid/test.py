@@ -1,11 +1,14 @@
 import unittest
 from engine import Network, Bus, Generator, Load, TransmissionLine, StorageUnit, EVFleet  # replace with your actual module name
 from draw import draw_network
+from save import save_network
 import os
 
 output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_outputs/")
 
 def save_network_outputs(n):
+    save_network(n, os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}.json"))
+
     for ts in n.timesteps:
         dot = draw_network(n, ts)
         dot.render(os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}_{ts}"), format='png')
