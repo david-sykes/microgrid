@@ -13,64 +13,27 @@ class Network:
         self.solved = False
         self.timesteps = timesteps
         self.timestep_index = {label: i for i, label in enumerate(self.timesteps)}
-
-
-    def add_bus(self, bus):
-        self.buses.append(bus)
-        bus.network = self
-        bus.nodal_prices = [None] * len(self.timesteps)
         
-        # Generators
-        for g in bus.generators:
-            g.outputs = []
-            for ts, capacity in zip(self.timesteps, g.capacities):
-                g.outputs.append(LpVariable(f"{g.name}_output_{ts}", 0, capacity))
-        
-        # Storage
-        for su in bus.storage_units:
-            su.charge_inflows = [] #Always positive
-            su.discharge_outflows = [] #Always positive
-            su.socs_start_of_ts = []
-            su.socs_end_of_ts = []
-            for i, ts in enumerate(self.timesteps):
-                su.charge_inflows.append(
-                    LpVariable(f"{su.name}_charge_inflows_{ts}", 
-                    0,
-                    su.max_charge_capacities[i]))
-                su.discharge_outflows.append(
-                    LpVariable(f"{su.name}_discharge_outflows_{ts}", 
-                    0,
-                    su.max_discharge_capacities[i]))
-                su.socs_start_of_ts.append(LpVariable(f"{su.name}_soc_start_of_{ts}", 0, su.max_soc_capacity))
-                su.socs_end_of_ts.append(LpVariable(f"{su.name}_soc_end_of_{ts}", 0, su.max_soc_capacity))
 
-        # EV Fleets
-        for evf in bus.ev_fleets:
-            evf.charge_inflows = [] #Always positive
-            evf.discharge_outflows = [] #Always positive
-            evf.socs_start_of_ts = []
-            evf.socs_end_of_ts = []
-            for i, ts in enumerate(self.timesteps):
-                evf.charge_inflows.append(
-                    LpVariable(f"{evf.name}_charge_inflows_{ts}", 
-                    0,
-                    evf.max_charge_capacities[i]))
-                evf.discharge_outflows.append(
-                    LpVariable(f"{evf.name}_discharge_outflows_{ts}", 
-                    0,
-                    evf.max_discharge_capacities[i]))
-                evf.socs_start_of_ts.append(LpVariable(f"{evf.name}_soc_start_of_{ts}", 0, evf.max_soc_capacity))
-                evf.socs_end_of_ts.append(LpVariable(f"{evf.name}_soc_end_of_{ts}", 0, evf.max_soc_capacity))
+        # # EV Fleets
+        # for evf in bus.ev_fleets:
+        #     evf.charge_inflows = [] #Always positive
+        #     evf.discharge_outflows = [] #Always positive
+        #     evf.socs_start_of_ts = []
+        #     evf.socs_end_of_ts = []
+        #     for i, ts in enumerate(self.timesteps):
+        #         evf.charge_inflows.append(
+        #             LpVariable(f"{evf.name}_charge_inflows_{ts}", 
+        #             0,
+        #             evf.max_charge_capacities[i]))
+        #         evf.discharge_outflows.append(
+        #             LpVariable(f"{evf.name}_discharge_outflows_{ts}", 
+        #             0,
+        #             evf.max_discharge_capacities[i]))
+        #         evf.socs_start_of_ts.append(LpVariable(f"{evf.name}_soc_start_of_{ts}", 0, evf.max_soc_capacity))
+        #         evf.socs_end_of_ts.append(LpVariable(f"{evf.name}_soc_end_of_{ts}", 0, evf.max_soc_capacity))
 
 
-    def add_transmission_line(self, transmission_line):
-        transmission_line.network = self
-        transmission_line.flows = []
-        for ts, capacity in zip(self.timesteps, transmission_line.capacities):
-            transmission_line.flows.append(
-                LpVariable(f"{transmission_line.name}_flow_{ts}", -capacity, capacity)
-            )
-        self.transmission_lines.append(transmission_line)
 
     def solve(self):
         # For now we solve the network for all timesteps as one problem
@@ -137,33 +100,33 @@ class Network:
                     if i < len(self.timesteps) - 1:
                         self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"Storage_SOC_continuity_{su.name}_{ts}"
 
-        # EV Fleet Constraints
-        for bus in self.buses:
-            for evf in bus.ev_fleets:
-                self.model += evf.socs_start_of_ts[0] == evf.min_soc_requirements_start_of_ts[0], f"EVFleet_SOC_Start_{evf.name}" # Storage SOC at start is the min requirement for that timestep - only needs doing once
-                self.model += evf.socs_end_of_ts[-1] == evf.min_soc_requirements_start_of_ts[-1], f"EVFleet_SOC_End_{evf.name}" # Storage SOC at end is the min requirement for that timestep - only needs doing once
+        # # EV Fleet Constraints
+        # for bus in self.buses:
+        #     for evf in bus.ev_fleets:
+        #         self.model += evf.socs_start_of_ts[0] == evf.min_soc_requirements_start_of_ts[0], f"EVFleet_SOC_Start_{evf.name}" # Storage SOC at start is the min requirement for that timestep - only needs doing once
+        #         self.model += evf.socs_end_of_ts[-1] == evf.min_soc_requirements_start_of_ts[-1], f"EVFleet_SOC_End_{evf.name}" # Storage SOC at end is the min requirement for that timestep - only needs doing once
             
-            for i, ts in enumerate(self.timesteps):
-                # EV Fleet can't charge or discharge more than its max charge/discharge capacity
-                self.model += evf.charge_inflows[i] <= evf.max_charge_capacities[i], f"EVFleet_charge_inflows_Max_{evf.name}_{ts}"
-                self.model += evf.discharge_outflows[i] <= evf.max_discharge_capacities[i], f"EVFleet_discharge_outflows_Min_{evf.name}_{ts}"
+        #     for i, ts in enumerate(self.timesteps):
+        #         # EV Fleet can't charge or discharge more than its max charge/discharge capacity
+        #         self.model += evf.charge_inflows[i] <= evf.max_charge_capacities[i], f"EVFleet_charge_inflows_Max_{evf.name}_{ts}"
+        #         self.model += evf.discharge_outflows[i] <= evf.max_discharge_capacities[i], f"EVFleet_discharge_outflows_Min_{evf.name}_{ts}"
 
-                # EV Fleet SOC can't be more than max capacity or less than zero
-                self.model += evf.socs_start_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_start_of_{ts}"
-                self.model += evf.socs_start_of_ts[i] >= evf.min_soc_requirements_start_of_ts[i], f"EVFleet_SOC_Min_{evf.name}_start_of_{ts}" # Storage SOC must be above the min requirement for that timestep
-                self.model += evf.socs_end_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_end_of_{ts}"
-                self.model += evf.socs_end_of_ts[i] >= 0, f"EVFleet_SOC_Min_{evf.name}_end_of_{ts}" # Storage SOC must be above zero
+        #         # EV Fleet SOC can't be more than max capacity or less than zero
+        #         self.model += evf.socs_start_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_start_of_{ts}"
+        #         self.model += evf.socs_start_of_ts[i] >= evf.min_soc_requirements_start_of_ts[i], f"EVFleet_SOC_Min_{evf.name}_start_of_{ts}" # Storage SOC must be above the min requirement for that timestep
+        #         self.model += evf.socs_end_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_end_of_{ts}"
+        #         self.model += evf.socs_end_of_ts[i] >= 0, f"EVFleet_SOC_Min_{evf.name}_end_of_{ts}" # Storage SOC must be above zero
 
-                # SOC and charge/discharge balance
-                self.model += evf.socs_end_of_ts[i] == evf.socs_start_of_ts[i]\
-                                        + evf.charge_efficiency * evf.charge_inflows[i]\
-                                        - (1 / evf.discharge_efficiency) * evf.discharge_outflows[i]\
-                                        - (evf.km_driven[i]*evf.mwh_per_km_driven),\
-                                        f"EVFleet_SOC_charge_balance_{evf.name}_{ts}"
+        #         # SOC and charge/discharge balance
+        #         self.model += evf.socs_end_of_ts[i] == evf.socs_start_of_ts[i]\
+        #                                 + evf.charge_efficiency * evf.charge_inflows[i]\
+        #                                 - (1 / evf.discharge_efficiency) * evf.discharge_outflows[i]\
+        #                                 - (evf.km_driven[i]*evf.mwh_per_km_driven),\
+        #                                 f"EVFleet_SOC_charge_balance_{evf.name}_{ts}"
                 
-                # Continuity of SOC
-                if i < len(self.timesteps) - 1:
-                    self.model += evf.socs_start_of_ts[i+1] == evf.socs_end_of_ts[i], f"EVFleet_SOC_continuity_{evf.name}_{ts}"
+        #         # Continuity of SOC
+        #         if i < len(self.timesteps) - 1:
+        #             self.model += evf.socs_start_of_ts[i+1] == evf.socs_end_of_ts[i], f"EVFleet_SOC_continuity_{evf.name}_{ts}"
 
         # Transmission Line Constraints
         for line in self.transmission_lines:
@@ -214,35 +177,69 @@ class Network:
         print(f"Solution: {LpStatus[self.model.status]}")
         return LpStatus[self.model.status]
 
+class Bus:
+    def __init__(self, name, network: Network):
+        self.name = name
+        self.generators = []
+        self.loads = []
+        self.storage_units = []
+        self.network = network
+        self.network.buses.append(self)
+        self.nodal_prices = [None] * len(self.network.timesteps)
+        self.ev_fleets = []
+
+    # def add_ev_fleet(self, ev_fleet: EVFleet):
+    #     self.ev_fleets.append(ev_fleet)
+    #     ev_fleet.bus = self
+
+    def get_lines_flowing_in(self):
+        return [line for line in self.network.transmission_lines if line.end_bus == self]
+
+    def get_lines_flowing_out(self):
+        return [line for line in self.network.transmission_lines if line.start_bus == self]
 
 class TransmissionLine:
-    def __init__(self,start_bus, end_bus, capacities: list):
+    def __init__(self,start_bus, end_bus, capacities: list, network: Network):
         self.name = f"{start_bus.name}_to_{end_bus.name}"
         self.start_bus = start_bus
         self.end_bus = end_bus
         self.capacities = capacities
-        self.flows = None
+        self.network = network
+        self.network.transmission_lines.append(self)
 
+        #Initialise decision variables
+        self.flows = []
+        for ts, capacity in zip(self.network.timesteps, self.capacities):
+            self.flows.append(LpVariable(f"{self.name}_flow_{ts}", -capacity, capacity))
+
+    
     def __repr__(self):
         flow_info = [f"{flow.varValue if flow else 'None'}" for flow in self.flows]
         return f"{self.name} - Start: {self.start_bus.name} - End: {self.end_bus.name} - Capacities: {self.capacities} - Flows: {flow_info}"
 
 class Generator:
-    def __init__(self, name, capacities: list, costs: list):
+    def __init__(self, name, capacities: list, costs: list, bus: Bus):
         self.name = name
         self.capacities = capacities
         self.costs = costs
-        self.bus = None
+        self.bus = bus
+        self.bus.generators.append(self)
 
+        # Initialise variables
+        self.outputs = []
+        for ts, capacity in zip(self.bus.network.timesteps, self.capacities):
+            self.outputs.append(LpVariable(f"{self.name}_output_{ts}", 0, capacity))
+        
     def __repr__(self):
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
 
 class Load:
-    def __init__(self, name, demands: list):
+    def __init__(self, name, demands: list, bus: Bus):
         self.name = name
         self.demands = demands
-        self.bus = None
+        self.bus = bus
+        self.bus.loads.append(self)
 
     def __repr__(self):
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
@@ -250,13 +247,27 @@ class Load:
 
 
 class StorageUnit:
-    def __init__(self, name, max_soc_capacity, max_charge_capacities, max_discharge_capacities, charge_efficiency=0.95, discharge_efficiency=0.95):
+    def __init__(self, name, bus: Bus, max_soc_capacity, max_charge_capacities, max_discharge_capacities, charge_efficiency=0.95, discharge_efficiency=0.95):
         self.name = name
         self.max_soc_capacity = max_soc_capacity
         self.max_charge_capacities = max_charge_capacities
         self.max_discharge_capacities = max_discharge_capacities
         self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
         self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
+        self.bus = bus
+        self.bus.storage_units.append(self)
+
+        # Initialise decision variables
+        self.charge_inflows = [] #Always positive
+        self.discharge_outflows = [] #Always positive
+        self.socs_start_of_ts = []
+        self.socs_end_of_ts = []
+        for i, ts in enumerate(self.bus.network.timesteps):
+            self.charge_inflows.append(LpVariable(f"{self.name}_charge_inflows_{ts}", 0, self.max_charge_capacities[i]))
+            self.discharge_outflows.append(LpVariable(f"{self.name}_discharge_outflows_{ts}", 0, self.max_discharge_capacities[i]))
+            self.socs_start_of_ts.append(LpVariable(f"{self.name}_soc_start_of_{ts}", 0, self.max_soc_capacity))
+            self.socs_end_of_ts.append(LpVariable(f"{self.name}_soc_end_of_{ts}", 0, self.max_soc_capacity))
+
     
     def __repr__(self):
         return f"{self.name} - Max SOC Capacity: {self.max_soc_capacity} - Max Charge Capacities: {self.max_charge_capacities} - Max Discharge Capacities: {self.max_discharge_capacities}"
@@ -279,34 +290,3 @@ class EVFleet:
         self.bus = None
         
 
-class Bus:
-    def __init__(self, name):
-        self.name = name
-        self.generators = []
-        self.loads = []
-        self.storage_units = []
-        self.network = None
-        self.nodal_prices = []
-        self.ev_fleets = []
-
-    def add_generator(self, generator: Generator):
-        self.generators.append(generator)
-        generator.bus = self
-
-    def add_load(self, load: Load):
-        self.loads.append(load)
-        load.bus = self
-
-    def add_storage_unit(self, storage_unit: StorageUnit):
-        self.storage_units.append(storage_unit)
-        storage_unit.bus = self
-
-    def add_ev_fleet(self, ev_fleet: EVFleet):
-        self.ev_fleets.append(ev_fleet)
-        ev_fleet.bus = self
-
-    def get_lines_flowing_in(self):
-        return [line for line in self.network.transmission_lines if line.end_bus == self]
-
-    def get_lines_flowing_out(self):
-        return [line for line in self.network.transmission_lines if line.start_bus == self]
