@@ -7,6 +7,7 @@ import os
 output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_outputs/")
 
 def save_network_outputs(n):
+    os.makedirs(os.path.join(output_dir, n.name.replace(' ', '-')), exist_ok=True)
     save_network(n, os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}.json"))
 
     for ts in n.timesteps:
@@ -166,6 +167,30 @@ class EVFleetNetwork(unittest.TestCase):
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[1].varValue, 10.0, delta=0.01)        
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[2].varValue, 0.0, delta=0.01)        
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[3].varValue, 0.0, delta=0.01)        
+
+class AllElements(unittest.TestCase):
+
+    def test_network(self):
+        timesteps = ['t0', 't1', 't3', 't4']
+        n = Network("AllElements", timesteps)
+
+        bus1 = Bus("Bus1", n)
+        Generator("Wind", capacities=[100, 15, 0, 0], costs=[0, 0, 0, 0], bus=bus1)
+        Load("Load1", consumptions=[15, 15, 10, 15], bus=bus1)
+        StorageUnit("Storage1", bus=bus1, max_soc_capacity=10, max_charge_capacities=[5, 5, 5, 5], 
+                    max_discharge_capacities=[5, 5, 5, 5], min_soc_requirements_start_of_ts=[0, 0, 0, 0], consumptions=[0, 0, 0, 0],
+                    charge_efficiency=1, discharge_efficiency=1)
+
+        bus2 = Bus("Bus2", n)
+        Generator("Gas", capacities=[15, 15, 15, 15], costs=[5, 5, 5, 5], bus=bus2)
+        Load("Load2", consumptions=[10, 10, 10, 10], bus=bus2)
+
+        t = TransmissionLine(start_bus=bus1, end_bus=bus2, capacities=[10, 10, 10, 10], network=n)
+
+        status = n.solve()
+        save_network_outputs(n)
+
+        self.assertEqual(status, "Optimal")
 
 
 

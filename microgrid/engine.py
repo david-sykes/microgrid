@@ -40,7 +40,10 @@ class Network:
                     raise TimestepLengthMismatch(f"Storage unit minimum SOC requirements timesteps do not match network timesteps for {su.name}")
                 if len(su.consumptions) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Storage unit consumption timesteps do not match network timesteps for {su.name}")
-                    
+        for tl in self.transmission_lines.values():
+            if len(tl.capacities) != len(self.timesteps):
+                raise TimestepLengthMismatch(f"Transmission line capacity timesteps do not match network timesteps for {tl.name}")
+                
 
 
         # Generator capacity constraints
