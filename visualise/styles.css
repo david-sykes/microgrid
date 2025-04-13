@@ -1,0 +1,111 @@
+/* Basic reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+}
+
+.container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Main content area */
+.content {
+    display: flex;
+    flex: 1;
+    height: 100vh;
+}
+
+/* Main network visualization area */
+.main-area {
+    flex: 1;
+    position: relative;
+    border-right: 1px solid #ccc;
+}
+
+#network-visualization {
+    width: 100%;
+    height: 100%;
+    border: 1px dashed #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+/* Timestep control */
+.timestep-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 200px;
+    z-index: 5;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+/* Graph popup */
+#graph-popup {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 300px;
+    background: white;
+    border-top: 2px solid #000;
+    padding: 20px;
+    z-index: 10;
+    transition: transform 0.3s ease-in-out;
+    transform: translateY(100%);
+}
+
+#graph-popup.hidden {
+    transform: translateY(100%);
+}
+
+#graph-popup:not(.hidden) {
+    transform: translateY(0);
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+/* Buttons */
+button {
+    padding: 8px 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+    margin: 5px;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+/* Close button for graph popup */
+#close-graph-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+/* Slider */
+input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+}

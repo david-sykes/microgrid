@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microgrid Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="main-area">
+                <div id="network-visualization">
+                    <!-- Network visualization will be rendered here -->
+                    <div class="timestep-control">
+                        <input type="range" id="timestep-slider" min="0" max="100" value="0">
+                    </div>
+                    <button id="select-element-btn">Select Network Element</button>
+                </div>
+                
+                <div id="graph-popup" class="hidden">
+                    <div id="element-graph"></div>
+                    <button id="close-graph-btn">Close Graph</button>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div id="sidebar-content">
+                    <!-- Sidebar content will go here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
