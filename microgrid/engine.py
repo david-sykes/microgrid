@@ -15,26 +15,6 @@ class Network:
         self.timestep_index = {label: i for i, label in enumerate(self.timesteps)}
         
 
-        # # EV Fleets
-        # for evf in bus.ev_fleets:
-        #     evf.charge_inflows = [] #Always positive
-        #     evf.discharge_outflows = [] #Always positive
-        #     evf.socs_start_of_ts = []
-        #     evf.socs_end_of_ts = []
-        #     for i, ts in enumerate(self.timesteps):
-        #         evf.charge_inflows.append(
-        #             LpVariable(f"{evf.name}_charge_inflows_{ts}", 
-        #             0,
-        #             evf.max_charge_capacities[i]))
-        #         evf.discharge_outflows.append(
-        #             LpVariable(f"{evf.name}_discharge_outflows_{ts}", 
-        #             0,
-        #             evf.max_discharge_capacities[i]))
-        #         evf.socs_start_of_ts.append(LpVariable(f"{evf.name}_soc_start_of_{ts}", 0, evf.max_soc_capacity))
-        #         evf.socs_end_of_ts.append(LpVariable(f"{evf.name}_soc_end_of_{ts}", 0, evf.max_soc_capacity))
-
-
-
     def solve(self):
         # For now we solve the network for all timesteps as one problem
         self.model = LpProblem("Energy_Planning", LpMinimize)
@@ -44,8 +24,8 @@ class Network:
 
         for b in self.buses:
             for l in b.loads:
-                if len(l.demands) != len(self.timesteps):
-                    raise TimestepLengthMismatch(f"Demand timesteps do not match network timesteps for {b.name}")
+                if len(l.consumptions) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Consumption timesteps do not match network timesteps for {b.name}")
             for g in b.generators:
                 if len(g.capacities) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Generator capacity timesteps do not match network timesteps for {g.name}")
@@ -56,13 +36,10 @@ class Network:
                     raise TimestepLengthMismatch(f"Storage unit charge capacity timesteps do not match network timesteps for {su.name}")
                 if len(su.max_discharge_capacities) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Storage unit discharge capacity timesteps do not match network timesteps for {su.name}")
-            for ev_fleet in b.ev_fleets:
-                if len(ev_fleet.km_driven) != len(self.timesteps):
-                    raise TimestepLengthMismatch(f"EV fleet miles driven timesteps do not match network timesteps for {ev_fleet.name}")
-                if len(ev_fleet.max_charge_capacities) != len(self.timesteps):
-                    raise TimestepLengthMismatch(f"EV fleet charge capacity timesteps do not match network timesteps for {ev_fleet.name}")
-                if len(ev_fleet.max_discharge_capacities) != len(self.timesteps):
-                    raise TimestepLengthMismatch(f"EV fleet discharge capacity timesteps do not match network timesteps for {ev_fleet.name}")
+                if len(su.min_soc_requirements_start_of_ts) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Storage unit minimum SOC requirements timesteps do not match network timesteps for {su.name}")
+                if len(su.consumptions) != len(self.timesteps):
+                    raise TimestepLengthMismatch(f"Storage unit consumption timesteps do not match network timesteps for {su.name}")
                     
 
 
@@ -76,57 +53,31 @@ class Network:
         for bus in self.buses:
             
             for su in bus.storage_units:
-                self.model += su.socs_start_of_ts[0] == 0, f"Storage_SOC_Start_{su.name}" # Storage SOC at start is zero - only needs doing once
-                self.model += su.socs_end_of_ts[-1] == 0, f"Storage_SOC_End_{su.name}" # Storage SOC at end is zero - only needs doing once
+                self.model += su.socs_start_of_ts[0] == su.min_soc_requirements_start_of_ts[0], f"{su.__class__.__name__}_SOC_Start_{su.name}" # Storage SOC at start is zero - only needs doing once
+                self.model += su.socs_end_of_ts[-1] == su.min_soc_requirements_start_of_ts[-1], f"{su.__class__.__name__}_SOC_End_{su.name}" # Storage SOC at end is zero - only needs doing once
 
                 for i, ts in enumerate(self.timesteps):
                     # Storage unit can't inflow or outflow more than it's max charge/discharge capacity
-                    self.model += su.charge_inflows[i] <= su.max_charge_capacities[i], f"Storage_charge_inflows_Max_{su.name}_{ts}"
-                    self.model += su.discharge_outflows[i] <= su.max_discharge_capacities[i], f"Storage_discharge_outflows_Min_{su.name}_{ts}"
+                    self.model += su.charge_inflows[i] <= su.max_charge_capacities[i], f"{su.__class__.__name__}_charge_inflows_Max_{su.name}_{ts}"
+                    self.model += su.discharge_outflows[i] <= su.max_discharge_capacities[i], f"{su.__class__.__name__}_discharge_outflows_Min_{su.name}_{ts}"
 
                     # Storage unit SOC can't be more than max capacity or less than zero
-                    self.model += su.socs_start_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_start_of_{ts}"
-                    self.model += su.socs_start_of_ts[i] >= 0, f"Storage_SOC_Min_{su.name}_start_of_{ts}" # Storage SOC at end is zero - only needs doing once
-                    self.model += su.socs_end_of_ts[i] <= su.max_soc_capacity, f"Storage_SOC_Max_{su.name}_end_of_{ts}"
-                    self.model += su.socs_end_of_ts[i] >= 0, f"Storage_SOC_Min_{su.name}_end_of_{ts}" # Storage SOC at end is zero - only needs doing once
+                    self.model += su.socs_start_of_ts[i] <= su.max_soc_capacity, f"{su.__class__.__name__}_SOC_Max_{su.name}_start_of_{ts}"
+                    self.model += su.socs_start_of_ts[i] >= su.min_soc_requirements_start_of_ts[i], f"Storage_SOC_Min_{su.name}_start_of_{ts}" # Storage SOC must be above min requirements
+                    self.model += su.socs_end_of_ts[i] <= su.max_soc_capacity, f"{su.__class__.__name__}_SOC_Max_{su.name}_end_of_{ts}"
+                    self.model += su.socs_end_of_ts[i] >= 0, f"{su.__class__.__name__}_SOC_Min_{su.name}_end_of_{ts}" # Storage SOC must be above zero
 
                     # SOC and charge/discharge balance
                     self.model += su.socs_end_of_ts[i] == su.socs_start_of_ts[i]\
                                             + su.charge_efficiency * su.charge_inflows[i]\
-                                            - (1 / su.discharge_efficiency) * su.discharge_outflows[i],\
-                                            f"Storage_SOC_charge_balance_{su.name}_{ts}"
+                                            - (1 / su.discharge_efficiency) * su.discharge_outflows[i]\
+                                            - su.consumptions[i],\
+                                            f"{su.__class__.__name__}_SOC_charge_balance_{su.name}_{ts}"
                     
                     # Continuity of SOC
                     if i < len(self.timesteps) - 1:
-                        self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"Storage_SOC_continuity_{su.name}_{ts}"
+                        self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"{su.__class__.__name__}_SOC_continuity_{su.name}_{ts}"
 
-        # # EV Fleet Constraints
-        # for bus in self.buses:
-        #     for evf in bus.ev_fleets:
-        #         self.model += evf.socs_start_of_ts[0] == evf.min_soc_requirements_start_of_ts[0], f"EVFleet_SOC_Start_{evf.name}" # Storage SOC at start is the min requirement for that timestep - only needs doing once
-        #         self.model += evf.socs_end_of_ts[-1] == evf.min_soc_requirements_start_of_ts[-1], f"EVFleet_SOC_End_{evf.name}" # Storage SOC at end is the min requirement for that timestep - only needs doing once
-            
-        #     for i, ts in enumerate(self.timesteps):
-        #         # EV Fleet can't charge or discharge more than its max charge/discharge capacity
-        #         self.model += evf.charge_inflows[i] <= evf.max_charge_capacities[i], f"EVFleet_charge_inflows_Max_{evf.name}_{ts}"
-        #         self.model += evf.discharge_outflows[i] <= evf.max_discharge_capacities[i], f"EVFleet_discharge_outflows_Min_{evf.name}_{ts}"
-
-        #         # EV Fleet SOC can't be more than max capacity or less than zero
-        #         self.model += evf.socs_start_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_start_of_{ts}"
-        #         self.model += evf.socs_start_of_ts[i] >= evf.min_soc_requirements_start_of_ts[i], f"EVFleet_SOC_Min_{evf.name}_start_of_{ts}" # Storage SOC must be above the min requirement for that timestep
-        #         self.model += evf.socs_end_of_ts[i] <= evf.max_soc_capacity, f"EVFleet_SOC_Max_{evf.name}_end_of_{ts}"
-        #         self.model += evf.socs_end_of_ts[i] >= 0, f"EVFleet_SOC_Min_{evf.name}_end_of_{ts}" # Storage SOC must be above zero
-
-        #         # SOC and charge/discharge balance
-        #         self.model += evf.socs_end_of_ts[i] == evf.socs_start_of_ts[i]\
-        #                                 + evf.charge_efficiency * evf.charge_inflows[i]\
-        #                                 - (1 / evf.discharge_efficiency) * evf.discharge_outflows[i]\
-        #                                 - (evf.km_driven[i]*evf.mwh_per_km_driven),\
-        #                                 f"EVFleet_SOC_charge_balance_{evf.name}_{ts}"
-                
-        #         # Continuity of SOC
-        #         if i < len(self.timesteps) - 1:
-        #             self.model += evf.socs_start_of_ts[i+1] == evf.socs_end_of_ts[i], f"EVFleet_SOC_continuity_{evf.name}_{ts}"
 
         # Transmission Line Constraints
         for line in self.transmission_lines:
@@ -146,13 +97,11 @@ class Network:
                     lpSum(g.outputs[i] for g in bus.generators)
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_in()])
                     + lpSum(su.discharge_outflows[i] for su in bus.storage_units)
-                    + lpSum(evf.discharge_outflows[i] for evf in bus.ev_fleets)
                     == 
                     # Flows out of node
-                    lpSum(l.demands[i] for l in bus.loads) 
+                    lpSum(l.consumptions[i] for l in bus.loads) 
                     + lpSum(su.charge_inflows[i] for su in bus.storage_units)
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
-                    + lpSum(evf.charge_inflows[i] for evf in bus.ev_fleets)
                 )
                 self.model += constraint, f"Energy_Balance_{bus.name}_{ts}"
                 energy_balance_constraints_ts[bus] = constraint
@@ -186,11 +135,6 @@ class Bus:
         self.network = network
         self.network.buses.append(self)
         self.nodal_prices = [None] * len(self.network.timesteps)
-        self.ev_fleets = []
-
-    # def add_ev_fleet(self, ev_fleet: EVFleet):
-    #     self.ev_fleets.append(ev_fleet)
-    #     ev_fleet.bus = self
 
     def get_lines_flowing_in(self):
         return [line for line in self.network.transmission_lines if line.end_bus == self]
@@ -235,9 +179,9 @@ class Generator:
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
 
 class Load:
-    def __init__(self, name, demands: list, bus: Bus):
+    def __init__(self, name, consumptions: list, bus: Bus):
         self.name = name
-        self.demands = demands
+        self.consumptions = consumptions
         self.bus = bus
         self.bus.loads.append(self)
 
@@ -247,11 +191,25 @@ class Load:
 
 
 class StorageUnit:
-    def __init__(self, name, bus: Bus, max_soc_capacity, max_charge_capacities, max_discharge_capacities, charge_efficiency=0.95, discharge_efficiency=0.95):
+    def __init__(
+        self,
+        name: str,
+        bus: Bus,
+        max_soc_capacity: float,
+        max_charge_capacities: list,
+        max_discharge_capacities: list,
+        min_soc_requirements_start_of_ts: list,
+        consumptions: list, #This is the energy consumed by the storage unit (e.g. if it is modelling EVs)
+        charge_efficiency: float = 0.95,
+        discharge_efficiency: float = 0.95
+    ):
         self.name = name
         self.max_soc_capacity = max_soc_capacity
         self.max_charge_capacities = max_charge_capacities
         self.max_discharge_capacities = max_discharge_capacities
+        self.min_soc_requirements_start_of_ts = min_soc_requirements_start_of_ts #The minimum SOC the storage needs at the start of the timestep
+        self.consumptions = consumptions
+
         self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
         self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
         self.bus = bus
@@ -272,21 +230,32 @@ class StorageUnit:
     def __repr__(self):
         return f"{self.name} - Max SOC Capacity: {self.max_soc_capacity} - Max Charge Capacities: {self.max_charge_capacities} - Max Discharge Capacities: {self.max_discharge_capacities}"
     
-class EVFleet:
+class EVFleet(StorageUnit):
     """Represents conventional EVs, as well as V2G EVs"""
-    def __init__(self, name, max_soc_capacity, min_soc_requirements_start_of_ts: list,
-                    max_charge_capacities: list, max_discharge_capacities: list,
-                    km_driven: list, mwh_per_km_driven=0.3/1000,
-                    charge_efficiency=0.95, discharge_efficiency=0.95):
-        self.name = name
-        self.max_soc_capacity = max_soc_capacity
-        self.min_soc_requirements_start_of_ts = min_soc_requirements_start_of_ts
-        self.max_charge_capacities = max_charge_capacities
-        self.max_discharge_capacities = max_discharge_capacities
-        self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
-        self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
-        self.km_driven = km_driven # A list of the miles driven in each simulation period
-        self.mwh_per_km_driven = mwh_per_km_driven # The amount of energy consumed per km driven
-        self.bus = None
-        
+    def __init__(
+        self,
+        name: str,
+        bus: Bus,
+        max_soc_capacity: float,
+        max_charge_capacities: list,
+        max_discharge_capacities: list,
+        min_soc_requirements_start_of_ts: list,
+        km_driven: list,
+        mwh_per_km_driven: float = 0.3/1000,
+        charge_efficiency: float = 0.95,
+        discharge_efficiency: float = 0.95,
+                    ):
+        consumptions = [km * mwh_per_km_driven for km in km_driven]
+        super().__init__(
+            name,
+            bus,
+            max_soc_capacity,
+            max_charge_capacities,
+            max_discharge_capacities,
+            min_soc_requirements_start_of_ts,
+            consumptions,
+            charge_efficiency,
+            discharge_efficiency
+        )
 
+        

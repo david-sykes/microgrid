@@ -4,7 +4,7 @@ from microgrid.draw import draw_network
 
 # Setup 1st bus
 b1 = Bus(name='North node')
-l1 = Load('N_domestic', demands=[50])
+l1 = Load('N_domestic', consumptions=[50])
 Ng1 = Generator('N_Wind', capacities=[100], costs=[0])
 
 b1.add_generator(Ng1)
@@ -13,7 +13,7 @@ b1.add_load(l1)
 b2 = Bus(name='South node')
 
 # Setup 2nd bus
-l2 = Load('S_domestic', demands=[100])
+l2 = Load('S_domestic', consumptions=[100])
 
 Sg1 = Generator('S_Gas', capacities=[50], costs=[100])
 Sg2 = Generator('S_Nuclear', capacities=[50], costs=[10])

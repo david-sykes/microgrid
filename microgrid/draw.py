@@ -6,8 +6,8 @@ def draw_network(network, timestep):
     dot = Digraph(comment='Energy Network')
     dot.graph_attr['rankdir'] = 'LR'
     for b in network.buses:
-        total_demand = sum([l.demands[timestep_index] for l in b.loads]) 
-        dot.node(b.name, label=f"{b.name}: {total_demand: .0f} MW \n {b.nodal_prices[timestep_index]} £/MWh", shape='doubleoctagon')
+        total_consumption = sum([l.consumptions[timestep_index] for l in b.loads]) 
+        dot.node(b.name, label=f"{b.name}: {total_consumption: .0f} MW \n {b.nodal_prices[timestep_index]} £/MWh", shape='doubleoctagon')
         # Generators
         for g in b.generators:
             dot.node(g.name, label=f"{g.name}: £{g.costs[timestep_index]}/MWh")
@@ -15,20 +15,14 @@ def draw_network(network, timestep):
 
         # Loads
         for l in b.loads:
-            dot.node(l.name, label=f"{l.name}: {l.demands[timestep_index]: .0f}MW", shape='house')
+            dot.node(l.name, label=f"{l.name}: {l.consumptions[timestep_index]: .0f}MW", shape='house')
             dot.edge(b.name, l.name)
 
         # Storage
         for su in b.storage_units:
-            dot.node(su.name, label=f"""{su.name}\nStart SOC: {su.socs_start_of_ts[timestep_index].varValue: .0f} / {su.max_soc_capacity}\nEnd SOC: {su.socs_end_of_ts[timestep_index].varValue: .0f} / {su.max_soc_capacity}""", shape='cylinder')
+            dot.node(su.name, label=f"""{su.name}\nStart SOC: {su.socs_start_of_ts[timestep_index].varValue: .0f} / {su.max_soc_capacity}\nEnd SOC: {su.socs_end_of_ts[timestep_index].varValue: .0f} / {su.max_soc_capacity}\nMWh consumed: {su.consumptions[timestep_index]: .0f}""", shape='cylinder')
             dot.edge(b.name, su.name, label=f"{su.charge_inflows[timestep_index].varValue: .0f} / {su.max_charge_capacities[timestep_index]}")
             dot.edge(su.name, b.name, label=f"{su.discharge_outflows[timestep_index].varValue: .0f} / {su.max_discharge_capacities[timestep_index]}")
-
-        # EV Fleet
-        for evf in b.ev_fleets:
-            dot.node(evf.name, label=f"""{evf.name}\nStart SOC: {evf.socs_start_of_ts[timestep_index].varValue: .0f} / {evf.max_soc_capacity}\nEnd SOC: {evf.socs_end_of_ts[timestep_index].varValue: .0f} / {evf.max_soc_capacity}\nMWh consumed driving: {evf.km_driven[timestep_index]*evf.mwh_per_km_driven: .0f}""", shape='cylinder')
-            dot.edge(b.name, evf.name, label=f"{evf.charge_inflows[timestep_index].varValue: .0f} / {evf.max_charge_capacities[timestep_index]}")
-            dot.edge(evf.name, b.name, label=f"{evf.discharge_outflows[timestep_index].varValue: .0f} / {evf.max_discharge_capacities[timestep_index]}")
 
     # Transmission Lines          
     for t in network.transmission_lines:
