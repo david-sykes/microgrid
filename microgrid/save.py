@@ -6,7 +6,7 @@ def unpack_lp_var_list(var_list):
 def save_network(n, output_path):
     network_output = {'network': {
         'name': n.name,
-        'timesteps': n.timesteps,
+        'timesteps': [(i, ts) for i, ts in enumerate(n.timesteps)],
         'buses': {
             bus.name: {
                 'generators': {
@@ -36,14 +36,17 @@ def save_network(n, output_path):
                         'soc_end_of_ts': unpack_lp_var_list(su.socs_end_of_ts)
                     }
                     for su in bus.storage_units.values()
-                }
+                },
+                'nodal_prices': bus.nodal_prices
             }
             for bus in n.buses.values()
         },
         'transmission_lines': {
             line.name: {
                 'capacity': line.capacities,
-                'flow': unpack_lp_var_list(line.flows)
+                'flow': unpack_lp_var_list(line.flows),
+                'start_bus': line.start_bus.name,
+                'end_bus': line.end_bus.name
             }
             for line in n.transmission_lines.values()
         }
