@@ -8,8 +8,8 @@ class TimestepLengthMismatch(Exception):
 class Network:
     def __init__(self, name: str, timesteps: list):
         self.name = name
-        self.buses = []
-        self.transmission_lines = []
+        self.buses = {}  
+        self.transmission_lines = {}  
         self.solved = False
         self.timesteps = timesteps
         self.timestep_index = {label: i for i, label in enumerate(self.timesteps)}
@@ -22,16 +22,16 @@ class Network:
         # Check timesteps match accross all components
         print("Checking timesteps match accross all components")
 
-        for b in self.buses:
-            for l in b.loads:
+        for b in self.buses.values():
+            for l in b.loads.values():
                 if len(l.consumptions) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Consumption timesteps do not match network timesteps for {b.name}")
-            for g in b.generators:
+            for g in b.generators.values():
                 if len(g.capacities) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Generator capacity timesteps do not match network timesteps for {g.name}")
                 if len(g.costs) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Generator cost timesteps do not match network timesteps for {g.name}")
-            for su in b.storage_units:
+            for su in b.storage_units.values():
                 if len(su.max_charge_capacities) != len(self.timesteps):
                     raise TimestepLengthMismatch(f"Storage unit charge capacity timesteps do not match network timesteps for {su.name}")
                 if len(su.max_discharge_capacities) != len(self.timesteps):
@@ -44,15 +44,16 @@ class Network:
 
 
         # Generator capacity constraints
-        for bus in self.buses:
-            for generator in bus.generators:
+        for bus in self.buses.values():
+            for generator in bus.generators.values():
                 for i, ts in enumerate(self.timesteps):
                     self.model += generator.outputs[i] <= generator.capacities[i], f"Generator_Capacity_{generator.name}_{ts}"
 
+
         # Storage Unit Constraints
-        for bus in self.buses:
+        for bus in self.buses.values():
             
-            for su in bus.storage_units:
+            for su in bus.storage_units.values():
                 self.model += su.socs_start_of_ts[0] == su.min_soc_requirements_start_of_ts[0], f"{su.__class__.__name__}_SOC_Start_{su.name}" # Storage SOC at start is zero - only needs doing once
                 self.model += su.socs_end_of_ts[-1] == su.min_soc_requirements_start_of_ts[-1], f"{su.__class__.__name__}_SOC_End_{su.name}" # Storage SOC at end is zero - only needs doing once
 
@@ -80,7 +81,7 @@ class Network:
 
 
         # Transmission Line Constraints
-        for line in self.transmission_lines:
+        for line in self.transmission_lines.values():
             for i, ts in enumerate(self.timesteps):
                 self.model += line.flows[i] <= line.capacities[i], f"Transmission_Line_Capacity_Max_{line.name}_{ts}"
                 self.model += line.flows[i] >= -line.capacities[i], f"Transmission_Line_Capacity_Min_{line.name}_{ts}"
@@ -91,16 +92,16 @@ class Network:
         energy_balance_constraints = []
         for i, ts in enumerate(self.timesteps):
             energy_balance_constraints_ts = {}
-            for bus in self.buses:
+            for bus in self.buses.values():
                 constraint = (
                     # Flows into node
-                    lpSum(g.outputs[i] for g in bus.generators)
+                    lpSum(g.outputs[i] for g in bus.generators.values())
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_in()])
-                    + lpSum(su.discharge_outflows[i] for su in bus.storage_units)
+                    + lpSum(su.discharge_outflows[i] for su in bus.storage_units.values())
                     == 
                     # Flows out of node
-                    lpSum(l.consumptions[i] for l in bus.loads) 
-                    + lpSum(su.charge_inflows[i] for su in bus.storage_units)
+                    lpSum(l.consumptions[i] for l in bus.loads.values()) 
+                    + lpSum(su.charge_inflows[i] for su in bus.storage_units.values())
                     + lpSum([t.flows[i] for t in bus.get_lines_flowing_out()])
                 )
                 self.model += constraint, f"Energy_Balance_{bus.name}_{ts}"
@@ -111,8 +112,8 @@ class Network:
         self.model += lpSum(
             g.costs[i] * g.outputs[i]
             for i, t in enumerate(self.timesteps)
-            for b in self.buses
-            for g in b.generators
+            for b in self.buses.values()
+            for g in b.generators.values()
         ), "Total_Cost"
 
         # Solve the model
@@ -129,18 +130,18 @@ class Network:
 class Bus:
     def __init__(self, name, network: Network):
         self.name = name
-        self.generators = []
-        self.loads = []
-        self.storage_units = []
+        self.generators = {}  
+        self.loads = {}  
+        self.storage_units = {}  
         self.network = network
-        self.network.buses.append(self)
+        self.network.buses[self.name] = self
         self.nodal_prices = [None] * len(self.network.timesteps)
 
     def get_lines_flowing_in(self):
-        return [line for line in self.network.transmission_lines if line.end_bus == self]
+        return [line for line in self.network.transmission_lines.values() if line.end_bus == self]
 
     def get_lines_flowing_out(self):
-        return [line for line in self.network.transmission_lines if line.start_bus == self]
+        return [line for line in self.network.transmission_lines.values() if line.start_bus == self]
 
 class TransmissionLine:
     def __init__(self,start_bus, end_bus, capacities: list, network: Network):
@@ -149,7 +150,7 @@ class TransmissionLine:
         self.end_bus = end_bus
         self.capacities = capacities
         self.network = network
-        self.network.transmission_lines.append(self)
+        self.network.transmission_lines[self.name] = self  
 
         #Initialise decision variables
         self.flows = []
@@ -167,13 +168,13 @@ class Generator:
         self.capacities = capacities
         self.costs = costs
         self.bus = bus
-        self.bus.generators.append(self)
+        self.bus.generators[self.name] = self  
 
         # Initialise variables
         self.outputs = []
         for ts, capacity in zip(self.bus.network.timesteps, self.capacities):
             self.outputs.append(LpVariable(f"{self.name}_output_{ts}", 0, capacity))
-        
+
     def __repr__(self):
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
         return f"{self.name} - Capacities: {self.capacities} - Costs: {self.costs} - Outputs: {output_info}"
@@ -183,7 +184,7 @@ class Load:
         self.name = name
         self.consumptions = consumptions
         self.bus = bus
-        self.bus.loads.append(self)
+        self.bus.loads[self.name] = self
 
     def __repr__(self):
         output_info = [f"{output.varValue if output else 'None'}" for output in self.outputs]
@@ -213,7 +214,7 @@ class StorageUnit:
         self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
         self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
         self.bus = bus
-        self.bus.storage_units.append(self)
+        self.bus.storage_units[self.name] = self  
 
         # Initialise decision variables
         self.charge_inflows = [] #Always positive
