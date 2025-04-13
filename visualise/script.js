@@ -6,9 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let networkData = null;
     let visNodes = null;
     let visEdges = null;
-    let flowChart; // global ref so we can destroy/update later
+    let generatorChart; // global ref so we can destroy/update later
+    let busChart; // global ref so we can destroy/update later
+    let storageChart; // global ref so we can destroy/update later
+    let loadChart; // global ref so we can destroy/update later
 
-    
     // Load network data from data.json
     fetch('data.json')
         .then(response => response.json())
@@ -79,8 +81,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Functions
     function showGraphPopup(nodeId) {
+       const node = visNodes.get(nodeId);
+
+       if (node.type === 'bus') {
+           renderBusChart(nodeId);
+       } else if (node.type === 'generator') {
+           renderGeneratorChart(nodeId);
+       } else if (node.type === 'load') {
+           renderLoadChart(nodeId);
+       } else if (node.type === 'storage') {
+           // To implement
+       }
+
         // Update the graph popup with data for the selected node
-        renderFlowChart(nodeId);
+        
         // Show the popup
         graphPopup.classList.remove('hidden');
     }
@@ -142,7 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     color: {
                         background: '#D2E5FF',
                         border: '#2B7CE9'
-                    }
+                    },
+                    type: 'bus'
                 });
             
         }
@@ -164,7 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     color: {
                         background: '#FFD700',
                         border: '#FF8C00'
-                    }
+                    },
+                    type: 'generator'
                 });
 
                 edges.push({
@@ -191,7 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     color: {
                         background: '#FFD700',
                         border: '#FF8C00'
-                    }
+                    },
+                    type: 'load'
                 });
                 edges.push({
                     id: load,
@@ -229,7 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     color: {
                         background: '#FFD700',
                         border: '#FF8C00'
-                    }
+                    },
+                    type: 'storage'
                 });
                 if (net_inflow > 0) {
                     edges.push({
@@ -350,15 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 showGraphPopup(nodeId);
             });
             
-            // Add event listener for edge selection
-            networkInstance.on('select', function (params) {
-                if (params.nodes.length > 0) {
-                    const nodeId = params.nodes[0];
-                    console.log('Node selected:', nodeId);
-                    showGraphPopup(nodeId);
-                }
-                // Do nothing if only edges are selected
-            });
         } catch (e) {
             console.error('Error creating network:', e);
         }
@@ -519,32 +528,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
-    function renderFlowChart(busId) {
-            if (flowChart) flowChart.destroy(); // prevent duplicate overlays
+    function renderBusChart(busId) {
+
+            if (generatorChart) generatorChart.destroy(); // prevent duplicate overlays
+            if (busChart) busChart.destroy();
+            if (storageChart) storageChart.destroy();
+            if (loadChart) loadChart.destroy();
 
             const ctx = document.getElementById('flow-chart').getContext('2d');
             
-            // Check if the busId exists in the network data
-            if (!networkData.network.buses[busId]) {
-                // If the selected element is not a bus, show a message
-                flowChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: [],
-                        datasets: []
-                    },
-                    options: {
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'No flow data available for this element'
-                            }
-                        }
-                    }
-                });
-                return;
-            }
-
             const busData = networkData.network.buses[busId];
 
             const flows = {
@@ -568,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // ➖ Outflows (Loads) as negative
+            // Outflows (Loads) as negative
             if (busData.loads) {
                 for (let load in busData.loads) {
                     const loadData = busData.loads[load];
@@ -625,15 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     stack: 'energy'
                 })
             }
-                    
-                    
-                    
-                
-                    
-                
-                
 
-            flowChart = new Chart(ctx, {
+            busChart = new Chart(ctx, {
                 type: 'bar',
                 data: flows,
                 options: {
@@ -676,9 +661,88 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     
-        
+    function renderGeneratorChart(generatorId){
+
+
+        if (generatorChart) generatorChart.destroy(); // prevent duplicate overlays
+        if (busChart) busChart.destroy();
+        if (storageChart) storageChart.destroy();
+        if (loadChart) loadChart.destroy();
+
+        const ctx = document.getElementById('flow-chart').getContext('2d');
+        for (let bus in networkData.network.buses) {
+            const busData = networkData.network.buses[bus];
+            if (busData.generators && busData.generators[generatorId]) {
+                const generatorData = busData.generators[generatorId];
+                const output = generatorData.output;
+                const outputData = {
+                    labels: networkData.network.timesteps,
+                    datasets: [{
+                        label: generatorId,
+                        data: output,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                };
+                generatorChart = new Chart(ctx, {
+                    type: 'line',
+                    data: outputData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Generator Output for ${generatorId}`
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+        }
+
+    }
           
-    
+    function renderLoadChart(loadId){
+        if (generatorChart) generatorChart.destroy(); // prevent duplicate overlays
+        if (busChart) busChart.destroy();
+        if (storageChart) storageChart.destroy();
+        if (loadChart) loadChart.destroy();
+
+        const ctx = document.getElementById('flow-chart').getContext('2d');
+        for (let bus in networkData.network.buses) {
+            const busData = networkData.network.buses[bus];
+            if (busData.loads && busData.loads[loadId]) {
+                const loadData = busData.loads[loadId];
+                const consumption = loadData.consumption;
+                const consumptionData = {
+                    labels: networkData.network.timesteps,
+                    datasets: [{
+                        label: loadId,
+                        data: consumption,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                };
+                loadChart = new Chart(ctx, {
+                    type: 'line',
+                    data: consumptionData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Load consumptions for ${loadId}`
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+        }
+    }
 
     // Initialize with graph popup hidden
     hideGraphPopup();
