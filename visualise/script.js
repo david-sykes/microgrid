@@ -166,11 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let bus in networkData.network.buses) {
             for (let generator in networkData.network.buses[bus].generators) {
                 const generatorData = networkData.network.buses[bus].generators[generator];
-                const output = generatorData.output && generatorData.output[timestepIndex] !== undefined 
-                    ? generatorData.output[timestepIndex].toFixed(2) 
+                const output = generatorData.outputs && generatorData.outputs[timestepIndex] !== undefined 
+                    ? generatorData.outputs[timestepIndex].toFixed(2) 
                     : 'N/A';
-                const capacity = generatorData.capacity && generatorData.capacity[timestepIndex] !== undefined
-                    ? generatorData.capacity[timestepIndex].toFixed(2) 
+                const capacity = generatorData.capacities && generatorData.capacities[timestepIndex] !== undefined
+                    ? generatorData.capacities[timestepIndex].toFixed(2) 
                     : 'N/A';
                 nodes.push({
                     id: generator,
@@ -197,8 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let bus in networkData.network.buses) {
             for (let load in networkData.network.buses[bus].loads) {
                 const loadData = networkData.network.buses[bus].loads[load];
-                const consumption = loadData.consumption && loadData.consumption[timestepIndex] !== undefined 
-                    ? loadData.consumption[timestepIndex].toFixed(2) 
+                const consumption = loadData.consumptions && loadData.consumptions[timestepIndex] !== undefined 
+                    ? loadData.consumptions[timestepIndex].toFixed(2) 
                     : 'N/A';
                 nodes.push({
                     id: load,
@@ -248,8 +248,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? storageData.discharge_outflows[timestepIndex].toFixed(2) 
                     : 'N/A';
                 const net_inflow = charge_inflow - discharge_outflow;
+                const consumption = storageData.consumptions && storageData.consumptions[timestepIndex] !== undefined 
+                    ? storageData.consumptions[timestepIndex].toFixed(2)
+                    : 'N/A';
+                    
 
-                
+                // Add the storage unit
                 nodes.push({
                     id: storage,
                     label: `${storage}\nStart SOC: ${start_soc}\nEnd SOC: ${end_soc}`,
@@ -260,6 +264,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     type: 'storage'
                 });
+
+                // Add the storage unit energy sync
+                nodes.push({
+                    id: `${storage}_consumption`,
+                    label: `${storage}\nConsumption: ${consumption}`,
+                    shape: 'box',
+                    color: {
+                        background: '#FFD700',
+                        border: '#FF8C00'
+                    },
+                    type: 'storage_consumption'
+                });
+
+
+
                 if (net_inflow > 0) {
                     edges.push({
                         id: storage,
@@ -278,6 +297,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                 }
 
+                // Add the storage unit energy sync edge
+                edges.push({
+                    id: `${storage}_consumption`,
+                    from: storage,
+                    to: `${storage}_consumption`,
+                    color: { color: 'blue' },
+                    label: `${consumption}`
+                })
+
             }
         }
 
@@ -286,11 +314,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add transmission lines
         for (let line in networkData.network.transmission_lines) {
             let lineData = networkData.network.transmission_lines[line];
-            const flow = lineData.flow && lineData.flow[timestepIndex] !== undefined 
-                ? lineData.flow[timestepIndex].toFixed(2) 
+            const flow = lineData.flows && lineData.flows[timestepIndex] !== undefined 
+                ? lineData.flows[timestepIndex].toFixed(2) 
                 : 'N/A';
-            const capacity = lineData.capacity && lineData.capacity[timestepIndex] !== undefined
-                ? lineData.capacity[timestepIndex].toFixed(2) 
+            const capacity = lineData.capacities && lineData.capacities[timestepIndex] !== undefined
+                ? lineData.capacities[timestepIndex].toFixed(2) 
                 : 'N/A';
             if (flow > 0) {
                 edges.push({
@@ -411,11 +439,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let bus in networkData.network.buses) {
             for (let generator in networkData.network.buses[bus].generators) {
                 const generatorData = networkData.network.buses[bus].generators[generator];
-                const output = generatorData.output && generatorData.output[timestepIndex] !== undefined 
-                    ? generatorData.output[timestepIndex].toFixed(2) 
+                const output = generatorData.outputs && generatorData.outputs[timestepIndex] !== undefined 
+                    ? generatorData.outputs[timestepIndex].toFixed(2) 
                     : 'N/A';
-                const capacity = generatorData.capacity && generatorData.capacity[timestepIndex] !== undefined
-                    ? generatorData.capacity[timestepIndex].toFixed(2) 
+                const capacity = generatorData.capacities && generatorData.capacities[timestepIndex] !== undefined
+                    ? generatorData.capacities[timestepIndex].toFixed(2) 
                     : 'N/A';
                 
                 // Update node label
@@ -438,8 +466,8 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let bus in networkData.network.buses) {
             for (let load in networkData.network.buses[bus].loads) {
                 const loadData = networkData.network.buses[bus].loads[load];
-                const consumption = loadData.consumption && loadData.consumption[timestepIndex] !== undefined 
-                    ? loadData.consumption[timestepIndex].toFixed(2) 
+                const consumption = loadData.consumptions && loadData.consumptions[timestepIndex] !== undefined 
+                    ? loadData.consumptions[timestepIndex].toFixed(2) 
                     : 'N/A';
                 
                 // Update node label
@@ -482,12 +510,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? storageData.discharge_outflows[timestepIndex].toFixed(2) 
                     : 'N/A';
                 const net_inflow = charge_inflow - discharge_outflow;
+                const consumption = storageData.consumptions && storageData.consumptions[timestepIndex] !== undefined 
+                    ? storageData.consumptions[timestepIndex].toFixed(2) 
+                    : 'N/A';
                 
                 // Update node label
                 const node = visNodes.get(storage);
                 if (node) {
                     node.label = `${storage}\nStart SOC: ${start_soc}\nEnd SOC: ${end_soc}`;
                     visNodes.update(node);
+                }
+
+                // Update storage consumption node
+                const consumptionNode = visNodes.get(`${storage}_consumption`);
+                if (consumptionNode) {
+                    consumptionNode.label = `${storage}\nConsumption: ${consumption}`;
+                    visNodes.update(consumptionNode);
                 }
 
                 // Update edge labels
@@ -506,17 +544,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         visEdges.update(edge);
                     }
                 }
+
+                // Update storage consumption edge
+                const consumptionEdge = visEdges.get(`${storage}_consumption`);
+                if (consumptionEdge) {
+                    consumptionEdge.from = storage;
+                    consumptionEdge.to = `${storage}_consumption`;
+                    consumptionEdge.label = `${consumption}`;
+                    visEdges.update(consumptionEdge);
+                }
             }
         }
 
         // Update transmission line nodes
         for (let line in networkData.network.transmission_lines) {
             const lineData = networkData.network.transmission_lines[line];
-            const flow = lineData.flow && lineData.flow[timestepIndex] !== undefined 
-                ? lineData.flow[timestepIndex].toFixed(2) 
+            const flow = lineData.flows && lineData.flows[timestepIndex] !== undefined 
+                ? lineData.flows[timestepIndex].toFixed(2) 
                 : 'N/A';
-            const capacity = lineData.capacity && lineData.capacity[timestepIndex] !== undefined
-                ? lineData.capacity[timestepIndex].toFixed(2) 
+            const capacity = lineData.capacities && lineData.capacities[timestepIndex] !== undefined
+                ? lineData.capacities[timestepIndex].toFixed(2) 
                 : 'N/A';
             
             // Update node label
@@ -631,10 +678,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (busData.generators) {
                 for (let generator in busData.generators) {
                     const generatorData = busData.generators[generator];
-                    if (generatorData.output) {
+                    if (generatorData.outputs) {
                         flows.datasets.push({
                             label: generator,
-                            data: generatorData.output,
+                            data: generatorData.outputs,
                             backgroundColor: generateColor(index),
                             stack: 'energy'
                         });
@@ -647,10 +694,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (busData.loads) {
                 for (let load in busData.loads) {
                     const loadData = busData.loads[load];
-                    if (loadData.consumption) {
+                    if (loadData.consumptions) {
                         flows.datasets.push({
                             label: load,
-                            data: loadData.consumption.map(v => -v),
+                            data: loadData.consumptions.map(v => -v),
                             backgroundColor: generateColor(index, 300),
                             stack: 'energy'
                         });
@@ -665,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lineData.start_bus === busId) {
                     flows.datasets.push({
                         label: line,
-                        data: lineData.flow.map(v => -v),
+                        data: lineData.flows.map(v => -v),
                         backgroundColor: color,
                         stack: 'energy'
                     })
@@ -673,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (lineData.end_bus === busId){
                     flows.datasets.push({
                         label: line,
-                        data: lineData.flow,
+                        data: lineData.flows,
                         backgroundColor: color,
                         stack: 'energy'
                     })
@@ -721,7 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const busData = networkData.network.buses[bus];
             if (busData.generators && busData.generators[generatorId]) {
                 const generatorData = busData.generators[generatorId];
-                const output = generatorData.output;
+                const output = generatorData.outputs;
                 const outputData = {
                     labels: networkData.network.timesteps,
                     datasets: [{
@@ -754,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const busData = networkData.network.buses[bus];
             if (busData.loads && busData.loads[loadId]) {
                 const loadData = busData.loads[loadId];
-                const consumption = loadData.consumption;
+                const consumption = loadData.consumptions;
                 const consumptionData = {
                     labels: networkData.network.timesteps,
                     datasets: [{
@@ -790,6 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const storageData = busData.storage_units[storageId];
                 const charge_inflows = storageData.charge_inflows
                 const discharge_outflows = storageData.discharge_outflows
+                const consumptions = storageData.consumptions.map(v => -v)
 
                 storageChart = new Chart(ctx, {
                     type: 'bar',
@@ -805,7 +853,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             {
                                 label: storageId + " Discharge",
                                 data: discharge_outflows.map(v => -v),
-                                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                                backgroundColor: 'rgba(99, 169, 255, 0.7)',
+                                stack: 'storage'
+                            },
+                            {
+                                label: storageId + " Consumption",
+                                data: consumptions,
+                                backgroundColor: 'rgba(255, 0, 55, 0.7)',
                                 stack: 'storage'
                             }
                         ]

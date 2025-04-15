@@ -11,25 +11,25 @@ def save_network(n, output_path):
             bus.name: {
                 'generators': {
                     gen.name: {
-                        'capacity': gen.capacities,
-                        'cost': gen.costs,
-                        'output': unpack_lp_var_list(gen.outputs)
+                        'capacities': gen.capacities,
+                        'costs': gen.costs,
+                        'outputs': unpack_lp_var_list(gen.outputs)
                     }
                     for gen in bus.generators.values()
                 },
                 'loads': {
                     load.name: {
-                        'consumption': load.consumptions
+                        'consumptions': load.consumptions
                     }
                     for load in bus.loads.values()
                 },
                 'storage_units': {
                     su.name: {
                         'max_soc_capacity': su.max_soc_capacity,
-                        'max_charge_capacity': su.max_charge_capacities,
-                        'max_discharge_capacity': su.max_discharge_capacities,
+                        'max_charge_capacities': su.max_charge_capacities,
+                        'max_discharge_capacities': su.max_discharge_capacities,
                         'min_soc_requirements': su.min_soc_requirements_start_of_ts,
-                        'consumption': su.consumptions,
+                        'consumptions': su.consumptions,
                         'charge_inflows': unpack_lp_var_list(su.charge_inflows),
                         'discharge_outflows': unpack_lp_var_list(su.discharge_outflows),
                         'soc_start_of_ts':unpack_lp_var_list(su.socs_start_of_ts),
@@ -43,8 +43,8 @@ def save_network(n, output_path):
         },
         'transmission_lines': {
             line.name: {
-                'capacity': line.capacities,
-                'flow': unpack_lp_var_list(line.flows),
+                'capacities': line.capacities,
+                'flows': unpack_lp_var_list(line.flows),
                 'start_bus': line.start_bus.name,
                 'end_bus': line.end_bus.name
             }
