@@ -55,17 +55,14 @@ body {
 
 /* Graph popup */
 #graph-popup {
-    position: absolute;
+    position: fixed;
     bottom: 0;
     left: 0;
-    right: 0;
-    height: 300px;
+    width: 100%;
     background: white;
-    border-top: 2px solid #000;
     padding: 20px;
-    z-index: 10;
-    transition: transform 0.3s ease-in-out;
-    transform: translateY(100%);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
 }
 
 #graph-popup.hidden {
@@ -74,6 +71,12 @@ body {
 
 #graph-popup:not(.hidden) {
     transform: translateY(0);
+}
+
+.chart-container {
+    width: 100%;
+    height: 400px;
+    position: relative;
 }
 
 /* Sidebar */

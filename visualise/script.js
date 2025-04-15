@@ -210,13 +210,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     type: 'load'
                 });
+                if (consumption > 0){
                 edges.push({
                     id: load,
                     from: bus,
                     to: load,
                     color: { color: 'blue' },
                     label: `${consumption}`
-                });
+                })
+            } else if (consumption < 0) {
+                edges.push({
+                    id: load,
+                    from: load,
+                    to: bus,
+                    color: { color: 'blue' },
+                    label: `${-consumption}`
+                })
+
+            }
             }
         }
 
@@ -441,6 +452,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update edge labels
                 const edge = visEdges.get(load);
                 if (edge) {
+                    if (consumption > 0) {
+                    edge.from = bus;
+                    edge.to = load;
+                    } else if (consumption < 0) {
+                    edge.from = load;
+                    edge.to = bus;
+                    }
                     edge.label = `${consumption}`;
                     visEdges.update(edge);
                 }
@@ -527,6 +545,71 @@ document.addEventListener('DOMContentLoaded', () => {
         const hue = (baseHue + index * hueStep) % 360;
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
+
+    function showFlowChart(nodeId) {
+        const graphPopup = document.getElementById('graph-popup');
+        graphPopup.classList.remove('hidden');
+        
+        const chartContainer = document.querySelector('.chart-container');
+        const canvas = document.getElementById('flow-chart');
+        
+        // Set canvas size to match container
+        canvas.width = chartContainer.offsetWidth;
+        canvas.height = chartContainer.offsetHeight;
+        
+        // Create or update chart
+        if (generatorChart) {
+            generatorChart.destroy();
+        }
+        if (busChart) {
+            busChart.destroy();
+        }
+        if (storageChart) {
+            storageChart.destroy();
+        }
+        if (loadChart) {
+            loadChart.destroy();
+        }
+
+        if (nodeId.type === 'bus') {
+            renderBusChart(nodeId);
+        } else if (nodeId.type === 'generator') {
+            renderGeneratorChart(nodeId);
+        } else if (nodeId.type === 'load') {
+            renderLoadChart(nodeId);
+        } else if (nodeId.type === 'storage') {
+            renderStorageChart(nodeId);
+        }
+    }
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                align: 'start',
+                labels: {
+                    boxWidth: 15,
+                    padding: 15
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Timestep'
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Power (MW)'
+                }
+            }
+        }
+    };
 
     function renderBusChart(busId) {
 
@@ -621,43 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
             busChart = new Chart(ctx, {
                 type: 'bar',
                 data: flows,
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: `Energy Flows at ${busId}`
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: true
-                        },
-                        y: {
-                            stacked: true,
-                            title: {
-                                display: true,
-                                text: 'Power (MW)'
-                            },
-                            grid: {
-                                drawBorder: true,
-                                drawOnChartArea: true,
-                                drawTicks: true,
-                                color: (context) => {
-                                    if (context.tick.value === 0) return '#333'; // thicker or darker line for y=0
-                                    return 'rgba(0,0,0,0.1)';
-                                },
-                                lineWidth: (context) => {
-                                    return context.tick.value === 0 ? 2 : 1;
-                                }
-                            }
-                        }
-                    }
-                }
+                options: chartOptions
             });
         }
     
@@ -688,15 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 generatorChart = new Chart(ctx, {
                     type: 'line',
                     data: outputData,
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: `Generator Output for ${generatorId}`
-                            }
-                        }
-                    }
+                    options: chartOptions
                 });
                 return;
             }
@@ -729,15 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadChart = new Chart(ctx, {
                     type: 'line',
                     data: consumptionData,
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: `Load consumptions for ${loadId}`
-                            }
-                        }
-                    }
+                    options: chartOptions
                 });
                 return;
             }
@@ -803,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         return context.tick.value === 0 ? 2 : 1;
                                     }
                                 }
-                            }
+                            }   
                         },
                         plugins: {
                             title: {
@@ -813,6 +844,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             tooltip: {
                                 mode: 'index',
                                 intersect: false
+                            },
+                            legend: {
+                                position: 'right',
+                                align: 'start',
+                                labels: {
+                                    boxWidth: 15,
+                                    padding: 15
+                                }
                             }
                         }
                     }
