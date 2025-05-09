@@ -13,7 +13,8 @@ def save_network(n, output_path):
                     gen.name: {
                         'capacities': gen.capacities,
                         'costs': gen.costs,
-                        'outputs': unpack_lp_var_list(gen.outputs)
+                        'outputs': unpack_lp_var_list(gen.outputs),
+                        'metadata': gen.metadata
                     }
                     for gen in bus.generators.values()
                 },

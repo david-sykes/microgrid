@@ -166,12 +166,13 @@ class TransmissionLine:
         return f"{self.name} - Start: {self.start_bus.name} - End: {self.end_bus.name} - Capacities: {self.capacities} - Flows: {flow_info}"
 
 class Generator:
-    def __init__(self, name, capacities: list, costs: list, bus: Bus):
+    def __init__(self, name, capacities: list, costs: list, bus: Bus, metadata: dict = {}):
         self.name = name
         self.capacities = capacities
         self.costs = costs
         self.bus = bus
-        self.bus.generators[self.name] = self  
+        self.bus.generators[self.name] = self
+        self.metadata = metadata # Can be used for custom fields like type, fuel etc.
 
         # Initialise variables
         self.outputs = []
