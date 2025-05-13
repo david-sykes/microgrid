@@ -1,7 +1,7 @@
 import unittest
-from engine import Network, Bus, Generator, Load, TransmissionLine, StorageUnit, EVFleet  # replace with your actual module name
-from draw import draw_network
-from save import save_network
+from microgrid.engine import Network, Bus, Generator, Load, TransmissionLine, StorageUnit  # replace with your actual module name
+from microgrid.draw import draw_network
+from microgrid.save import save_network
 import os
 
 output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_outputs/")
@@ -139,32 +139,33 @@ class EVFleetNetwork(unittest.TestCase):
         n = Network("EVFleet", timesteps)
 
         bus1 = Bus("Bus1", n)
-        Generator("Gen1", capacities=[30, 30, 30, 30], costs=[20, 10, 20, 20], bus=bus1)
-        EVFleet("EVFleet", bus=bus1, max_soc_capacity=10, max_charge_capacities=[20, 20, 20, 20], 
+        Generator("Gen1", capacities=[30, 30, 30, 30], costs=[10, 100, 20, 20], bus=bus1)
+        StorageUnit("EVFleet", bus=bus1, max_soc_capacity=20, max_charge_capacities=[20, 20, 20, 20], 
                     max_discharge_capacities=[0, 0, 0, 0], min_soc_requirements_start_of_ts=[0, 0, 0, 0],
-                    charge_efficiency=1, discharge_efficiency=1, km_driven=[0, 0, 33_333, 0], mwh_per_km_driven=0.3/1000)
-
+                    charge_efficiency=1, discharge_efficiency=1, 
+                    consumptions=[0, 20, 20, 0]
+                    )
         status = n.solve()
         save_network_outputs(n)
 
         self.assertEqual(status, "Optimal")
-        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[0].varValue, 0.0)
-        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[1].varValue, 10.0, delta=0.01)
-        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[2].varValue, 0.0, delta=0.01)
+        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[0].varValue, 20.0)
+        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[1].varValue, 0.0, delta=0.01)
+        self.assertAlmostEqual(bus1.generators["Gen1"].outputs[2].varValue, 20.0, delta=0.01)
         self.assertAlmostEqual(bus1.generators["Gen1"].outputs[3].varValue, 0.0, delta=0.01)
 
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[0], 0.0, delta=0.01)
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[1], 0.0, delta=0.01)
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[2], 10.0, delta=0.01)
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[1], 20.0, delta=0.01)
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[2], 20.0, delta=0.01)
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].consumptions[3], 0.0, delta=0.01)
 
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[0].varValue, 0.0, delta=0.01)
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[1].varValue, 10.0, delta=0.01)
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[2].varValue, 0.0, delta=0.01)
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[0].varValue, 20.0, delta=0.01)
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[1].varValue, 0.0, delta=0.01)
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[2].varValue, 20.0, delta=0.01)
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].charge_inflows[3].varValue, 0.0, delta=0.01)
 
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[0].varValue, 0.0, delta=0.01)        
-        self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[1].varValue, 10.0, delta=0.01)        
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[0].varValue, 20.0, delta=0.01)        
+        self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[1].varValue, 0.0, delta=0.01)        
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[2].varValue, 0.0, delta=0.01)        
         self.assertAlmostEqual(bus1.storage_units["EVFleet"].socs_end_of_ts[3].varValue, 0.0, delta=0.01)        
 

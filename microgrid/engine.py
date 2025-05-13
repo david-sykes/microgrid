@@ -1,9 +1,22 @@
 from pulp import LpMinimize, LpProblem, LpVariable, lpSum, LpStatus
+from enum import Enum
 
 class TimestepLengthMismatch(Exception):
     """Raised when the length of timesteps does not match other time-dependent data."""
     pass
 
+class GeneratorType(Enum):
+    WIND = "wind"
+    SOLAR = "solar"
+    CCGT = "ccgt"
+    OCGT = "ocgt"
+    NUCLEAR = "nuclear"
+
+class StorageType(Enum):
+    BATTERY = "battery"
+    PUMPED_STORAGE = "pumped_storage"
+    EV_FLEET = "ev_fleet"
+    
 
 class Network:
     def __init__(self, name: str, timesteps: list):
@@ -166,13 +179,20 @@ class TransmissionLine:
         return f"{self.name} - Start: {self.start_bus.name} - End: {self.end_bus.name} - Capacities: {self.capacities} - Flows: {flow_info}"
 
 class Generator:
-    def __init__(self, name, capacities: list, costs: list, bus: Bus, metadata: dict = {}):
+    def __init__(
+        self, 
+        name, 
+        capacities: list,
+        costs: list,
+        bus: Bus,
+        generator_type: GeneratorType = None
+        ):
         self.name = name
         self.capacities = capacities
         self.costs = costs
         self.bus = bus
         self.bus.generators[self.name] = self
-        self.metadata = metadata # Can be used for custom fields like type, fuel etc.
+        self.generator_type = generator_type
 
         # Initialise variables
         self.outputs = []
@@ -205,8 +225,9 @@ class StorageUnit:
         max_discharge_capacities: list,
         min_soc_requirements_start_of_ts: list,
         consumptions: list, #This is the energy consumed by the storage unit (e.g. if it is modelling EVs)
+        storage_type: StorageType = None,
         charge_efficiency: float = 0.95,
-        discharge_efficiency: float = 0.95
+        discharge_efficiency: float = 0.95,
     ):
         self.name = name
         self.max_soc_capacity = max_soc_capacity
@@ -218,7 +239,8 @@ class StorageUnit:
         self.charge_efficiency = charge_efficiency #This is defined as energy stored / energy imported from grid 
         self.discharge_efficiency = discharge_efficiency #This is defined as energy exported / energy stored
         self.bus = bus
-        self.bus.storage_units[self.name] = self  
+        self.bus.storage_units[self.name] = self
+        self.storage_type = storage_type
 
         # Initialise decision variables
         self.charge_inflows = [] #Always positive
@@ -235,32 +257,5 @@ class StorageUnit:
     def __repr__(self):
         return f"{self.name} - Max SOC Capacity: {self.max_soc_capacity} - Max Charge Capacities: {self.max_charge_capacities} - Max Discharge Capacities: {self.max_discharge_capacities}"
     
-class EVFleet(StorageUnit):
-    """Represents conventional EVs, as well as V2G EVs"""
-    def __init__(
-        self,
-        name: str,
-        bus: Bus,
-        max_soc_capacity: float,
-        max_charge_capacities: list,
-        max_discharge_capacities: list,
-        min_soc_requirements_start_of_ts: list,
-        km_driven: list,
-        mwh_per_km_driven: float = 0.3/1000,
-        charge_efficiency: float = 0.95,
-        discharge_efficiency: float = 0.95,
-                    ):
-        consumptions = [km * mwh_per_km_driven for km in km_driven]
-        super().__init__(
-            name,
-            bus,
-            max_soc_capacity,
-            max_charge_capacities,
-            max_discharge_capacities,
-            min_soc_requirements_start_of_ts,
-            consumptions,
-            charge_efficiency,
-            discharge_efficiency
-        )
 
         
