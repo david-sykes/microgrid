@@ -14,7 +14,7 @@ def save_network(n, output_path):
                         'capacities': gen.capacities,
                         'costs': gen.costs,
                         'outputs': unpack_lp_var_list(gen.outputs),
-                        'generator_type': gen.generator_type,
+                        'generator_type': gen.generator_type.value if gen.generator_type else None,
                     }
                     for gen in bus.generators.values()
                 },
@@ -35,7 +35,7 @@ def save_network(n, output_path):
                         'discharge_outflows': unpack_lp_var_list(su.discharge_outflows),
                         'soc_start_of_ts':unpack_lp_var_list(su.socs_start_of_ts),
                         'soc_end_of_ts': unpack_lp_var_list(su.socs_end_of_ts),
-                        'storage_type': su.storage_type,
+                        'storage_type': su.storage_type.value if su.storage_type else None,
                         
                     }
                     for su in bus.storage_units.values()

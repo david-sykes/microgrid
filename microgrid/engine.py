@@ -11,6 +11,7 @@ class GeneratorType(Enum):
     CCGT = "ccgt"
     OCGT = "ocgt"
     NUCLEAR = "nuclear"
+    BIOMASS = "biomass"
 
 class StorageType(Enum):
     BATTERY = "battery"
