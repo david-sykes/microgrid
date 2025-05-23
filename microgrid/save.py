@@ -97,6 +97,8 @@ def save_network_duckdb(n, output_path):
             generator_df = pd.DataFrame(
                 data={
                     'output': [o.varValue for o in generator.outputs],
+                    'capacity': generator.capacities,
+                    'costs': generator.costs,
                     'timestep': timesteps
                 }
             )
@@ -126,12 +128,17 @@ def save_network_duckdb(n, output_path):
                     'soc_start_of_ts': [o.varValue for o in storage_unit.socs_start_of_ts],
                     'soc_end_of_ts': [o.varValue for o in storage_unit.socs_end_of_ts],
                     'consumptions': storage_unit.consumptions,
+                    'max_charge_capacity': storage_unit.max_charge_capacities,
+                    'max_discharge_capacity': storage_unit.max_discharge_capacities,
+                    'min_soc_requirements': storage_unit.min_soc_requirements_start_of_ts,
                     'timestep': timesteps
                 }
             )
             storage_unit_df['bus'] = bus_name
             storage_unit_df['storage_unit'] = storage_unit_name
             storage_unit_df['storage_type'] = storage_unit.storage_type.value if storage_unit.storage_type else 'Unclassified'
+            storage_unit_df['max_soc_capacity'] = storage_unit.max_soc_capacity
+
             storage_unit_outputs.append(storage_unit_df)
 
     if storage_unit_outputs:
