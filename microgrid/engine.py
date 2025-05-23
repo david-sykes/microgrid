@@ -6,12 +6,13 @@ class TimestepLengthMismatch(Exception):
     pass
 
 class GeneratorType(Enum):
-    WIND = "wind"
-    SOLAR = "solar"
-    CCGT = "ccgt"
-    OCGT = "ocgt"
-    NUCLEAR = "nuclear"
-    BIOMASS = "biomass"
+    WIND = "WIND"
+    SOLAR = "SOLAR"
+    CCGT = "CCGT"
+    OCGT = "OCGT"
+    NUCLEAR = "NUCLEAR"
+    BIOMASS = "BIOMASS"
+    INTERCONNECTOR = "INTERCONNECTOR"
 
 class StorageType(Enum):
     BATTERY = "battery"

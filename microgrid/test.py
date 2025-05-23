@@ -1,5 +1,5 @@
 import unittest
-from microgrid.engine import Network, Bus, Generator, Load, TransmissionLine, StorageUnit  # replace with your actual module name
+from microgrid.engine import Network, Bus, Generator, Load, TransmissionLine, StorageUnit, StorageType, GeneratorType  # replace with your actual module name
 from microgrid.draw import draw_network
 from microgrid.save import save_network
 import os
@@ -8,7 +8,9 @@ output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_o
 
 def save_network_outputs(n):
     os.makedirs(os.path.join(output_dir, n.name.replace(' ', '-')), exist_ok=True)
-    save_network(n, os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}.json"))
+    json_path = os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}.json")
+    duckdb_path = os.path.join(output_dir,n.name.replace(' ', '-'), f"{n.name.replace(' ', '-')}.db")
+    save_network(n, json_path, duckdb_path)
 
     for ts in n.timesteps:
         dot = draw_network(n, ts)
@@ -176,16 +178,16 @@ class AllElements(unittest.TestCase):
         n = Network("AllElements", timesteps)
 
         bus1 = Bus("Bus1", n)
-        Generator("Wind", capacities=[100, 15, 0, 0], costs=[0, 0, 0, 0], bus=bus1)
+        Generator("Wind", capacities=[100, 15, 0, 0], costs=[0, 0, 0, 0], bus=bus1, generator_type=GeneratorType.WIND)
         Load("Load1", consumptions=[15, 15, 10, 15], bus=bus1)
         StorageUnit("Storage1", bus=bus1, max_soc_capacity=10, max_charge_capacities=[5, 5, 5, 5], 
                     max_discharge_capacities=[5, 5, 5, 5], min_soc_requirements_start_of_ts=[0, 0, 0, 0], consumptions=[0, 0, 0, 0],
-                    charge_efficiency=1, discharge_efficiency=1)
+                    charge_efficiency=1, discharge_efficiency=1, storage_type=StorageType.BATTERY)
 
         bus2 = Bus("Bus2", n)
-        Generator("Gas", capacities=[20, 20, 20, 20], costs=[5, 5, 5, 5], bus=bus2)
+        Generator("Gas", capacities=[20, 20, 20, 20], costs=[5, 5, 5, 5], bus=bus2, generator_type=GeneratorType.CCGT)
         Load("Load2", consumptions=[10, 10, 10, 10], bus=bus2)
-        Generator("Solar", capacities=[0, 2, 2, 0], costs=[0, 0, 0, 0], bus=bus2)
+        Generator("Solar", capacities=[0, 2, 2, 0], costs=[0, 0, 0, 0], bus=bus2, generator_type=GeneratorType.SOLAR)
 
         t = TransmissionLine(start_bus=bus1, end_bus=bus2, capacities=[20, 20, 20, 20], network=n)
 
