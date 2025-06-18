@@ -248,8 +248,10 @@ def save_network_duckdb(n, output_path):
 
 
         
-def save_network(n, json_output_path, duckdb_output_path):
-    save_network_json(n, json_output_path)
-    save_network_duckdb(n, duckdb_output_path)
+def save_network(n, json_output_path=None, duckdb_output_path=None):
+    if json_output_path:
+        save_network_json(n, json_output_path)
+    if duckdb_output_path:
+        save_network_duckdb(n, duckdb_output_path)
 
 

@@ -59,15 +59,16 @@ class Network:
             if len(tl.capacities) != len(self.timesteps):
                 raise TimestepLengthMismatch(f"Transmission line capacity timesteps do not match network timesteps for {tl.name}")
                 
+        print("Timesteps match accross all components")
 
-
+        print("Building generator capacity constraints")
         # Generator capacity constraints
         for bus in self.buses.values():
             for generator in bus.generators.values():
                 for i, ts in enumerate(self.timesteps):
                     self.model += generator.outputs[i] <= generator.capacities[i], f"Generator_Capacity_{generator.name}_{ts}"
 
-
+        print("Building storage unit constraints")
         # Storage Unit Constraints
         for bus in self.buses.values():
             
@@ -98,6 +99,7 @@ class Network:
                         self.model += su.socs_start_of_ts[i+1] == su.socs_end_of_ts[i], f"{su.__class__.__name__}_SOC_continuity_{su.name}_{ts}"
 
 
+        print("Building transmission line constraints")
         # Transmission Line Constraints
         for line in self.transmission_lines.values():
             for i, ts in enumerate(self.timesteps):
@@ -105,7 +107,7 @@ class Network:
                 self.model += line.flows[i] >= -line.capacities[i], f"Transmission_Line_Capacity_Min_{line.name}_{ts}"
 
                     
-
+        print("Building energy balance constraints")
         # Energy Balance: Generation + Imports = Demand + Exports
         energy_balance_constraints = []
         for i, ts in enumerate(self.timesteps):
@@ -126,6 +128,7 @@ class Network:
                 energy_balance_constraints_ts[bus] = constraint
             energy_balance_constraints.append(energy_balance_constraints_ts)
 
+        print("Building objective function")
         # --- Define Objective Function ---
         self.model += lpSum(
             g.costs[i] * g.outputs[i]
@@ -134,9 +137,11 @@ class Network:
             for g in b.generators.values()
         ), "Total_Cost"
 
+        print("Solving model")
         # Solve the model
         self.model.solve()
 
+        print("Extracting nodal prices")
         # Extract nodal prices
         for i, ts in enumerate(self.timesteps):
             energy_balance_constraints_ts = energy_balance_constraints[i]
