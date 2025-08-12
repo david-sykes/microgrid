@@ -1,0 +1,25 @@
+[project]
+name = "microgrid"
+version = "0.1.0"
+description = "A tiny repo for simple electricity system modelling. Inspired by Andrej Karpathy's micrograd"
+authors = [
+    {name = "David Sykes"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pulp",
+    "graphviz",
+    "requests",
+    "pandas",
+    "jupyter",
+    "matplotlib",
+    "duckdb",
+    "harlequin",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[tool.uv]
+dev-dependencies = []

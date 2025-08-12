@@ -1,3 +1,6 @@
 test_outputs/*
 Pipfile.lock
 *.pyc
+.venv/
+__pycache__
+.DS_Store
